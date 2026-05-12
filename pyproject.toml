@@ -28,10 +28,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/TODO/scori"
-Repository = "https://github.com/TODO/scori"
-Issues = "https://github.com/TODO/scori/issues"
-Changelog = "https://github.com/TODO/scori/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/pauloestevao795/scori"
+Repository = "https://github.com/pauloestevao795/scori"
+Issues = "https://github.com/pauloestevao795/scori/issues"
+Changelog = "https://github.com/pauloestevao795/scori/blob/main/CHANGELOG.md"
 
 [project.scripts]
 scori = "scori.__main__:main"
