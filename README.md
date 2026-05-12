@@ -38,6 +38,12 @@ scori update --path . --apply                # write changes + create backup
 scori update --path . --apply --max-friction medium  # only Low/Medium deps
 scori update --path . --rollback             # restore from last backup
 
+# Generate a standalone report
+scori report --path .                        # writes scori-report.html
+scori report --path . --format json          # prints JSON to stdout
+scori report --path . --output out.html      # custom output path
+scori report --path . --ci --threshold 60    # exit 1 if any score > 60
+
 # List all detected dependencies
 scori scan --path .
 ```
@@ -109,8 +115,9 @@ For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directl
 
 ## Roadmap
 
-- **v0.2** — `scori report`: rich HTML with charts and history
-- **v0.3** — support for `poetry.lock` and `uv.lock` for real transitive tree
+- **v0.3** — parse `poetry.lock` / `uv.lock` for real transitive dep counts
+- **v0.3** — weight CVSS ≥ 9.0 CVEs more heavily in the score
+- **v0.4** — `scori-action` for GitHub Actions, pre-commit hook
 
 ## Contributing
 

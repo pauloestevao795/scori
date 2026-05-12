@@ -8,6 +8,13 @@ semantic versioning [SemVer](https://semver.org/).
 
 ### Added
 
+- `scori report` command: generates a polished standalone report
+  - `--format html` (default): dark-theme HTML with traffic-light indicators,
+    summary cards by label, and per-dependency recommendations; sorted by
+    friction score descending
+  - `--format json`: structured JSON suitable for CI/CD consumption
+  - `--output FILE`: write to a custom path instead of `scori-report.html`
+  - `--ci` / `--threshold`: exit 1 if any dependency exceeds the threshold
 - `scori update` command with three modes:
   - `--dry-run`: shows a table of pending version bumps without touching files
   - `--apply`: writes updated versions to manifest files and creates a backup

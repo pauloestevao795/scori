@@ -45,11 +45,11 @@ Complete the commands already declared in the CLI but not yet implemented.
 - [x] `--rollback`: restore the most recent backup
 - [x] `--max-friction <label>`: only update deps at or below a given friction label (e.g. `medium`)
 
-### `scori report`
+### `scori report` ✅
 
-- [ ] Standalone HTML report with a visual traffic-light indicator per dependency
-- [ ] Structured JSON export suitable for CI/CD pipeline consumption
-- [ ] `--ci` flag: exit with code 1 if any dependency exceeds a configurable score threshold
+- [x] Standalone HTML report with a visual traffic-light indicator per dependency
+- [x] Structured JSON export suitable for CI/CD pipeline consumption
+- [x] `--ci` flag: exit with code 1 if any dependency exceeds a configurable score threshold
 
 ---
 

@@ -5,9 +5,7 @@ Available commands:
     scori friction --path . [--format json|table|html] [--ci [--threshold N]]
     scori monitor --path . [--watch [--interval N]]
     scori update --path . [--dry-run | --apply [--max-friction LABEL] | --rollback]
-
-TODO v0.2+:
-    scori report                # rich HTML with charts
+    scori report --path . [--format html|json] [--output FILE] [--ci [--threshold N]]
 """
 
 from __future__ import annotations
@@ -18,6 +16,7 @@ import re
 import shutil
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -206,6 +205,153 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
         except KeyboardInterrupt:
             break
 
+    return 0
+
+
+_REPORT_CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0d1117; color: #e6edf3; padding: 2rem; }
+h1 { font-size: 1.5rem; margin-bottom: .25rem; }
+.meta { color: #8b949e; font-size: .85rem; margin-bottom: 2rem; }
+.summary { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+        padding: 1rem 1.5rem; min-width: 120px; text-align: center; }
+.card .count { font-size: 2rem; font-weight: 700; }
+.card .label { font-size: .8rem; color: #8b949e; margin-top: .25rem; }
+.low .count { color: #3fb950; }
+.medium .count { color: #d29922; }
+.high .count { color: #f0883e; }
+.critical .count { color: #f85149; }
+.total .count { color: #e6edf3; }
+table { width: 100%; border-collapse: collapse; background: #161b22;
+        border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+th { background: #21262d; color: #8b949e; font-size: .75rem; text-transform: uppercase;
+     letter-spacing: .05em; padding: .75rem 1rem; text-align: left; }
+td { padding: .75rem 1rem; border-top: 1px solid #21262d; font-size: .9rem; }
+tr:hover td { background: #1c2128; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+       margin-right: .5rem; vertical-align: middle; }
+.dot-low { background: #3fb950; }
+.dot-medium { background: #d29922; }
+.dot-high { background: #f0883e; }
+.dot-critical { background: #f85149; }
+.score-low { color: #3fb950; font-weight: 600; }
+.score-medium { color: #d29922; font-weight: 600; }
+.score-high { color: #f0883e; font-weight: 600; }
+.score-critical { color: #f85149; font-weight: 600; }
+.cve-fixed { color: #3fb950; }
+.cve-bad { color: #f85149; }
+.cve-none { color: #8b949e; }
+"""
+
+
+def _fmt_cves_html(current: int, latest: int) -> str:
+    if current == -1:
+        return f'<span class="cve-none">? → {latest}</span>' if latest > 0 else "?"
+    if current == 0 and latest == 0:
+        return '<span class="cve-none">—</span>'
+    if current > 0 and latest == 0:
+        fixed = '<span class="cve-fixed">0 ✓</span>'
+        return f'<span class="cve-bad">{current}</span> → {fixed}'
+    if current > 0 and latest < current:
+        return f'<span class="cve-bad">{current}</span> → {latest}'
+    if current > 0:
+        return f'<span class="cve-bad">{current}</span>'
+    return f'→ {latest}'
+
+
+def _build_rich_html(results: list[FrictionResult], path: str) -> str:
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    counts: dict[str, int] = {"Low": 0, "Medium": 0, "High": 0, "Critical": 0}
+    for r in results:
+        counts[r["label"]] = counts.get(r["label"], 0) + 1
+
+    summary_cards = "".join(
+        f'<div class="card {label.lower()}">'
+        f'<div class="count">{counts[label]}</div>'
+        f'<div class="label">{label}</div></div>'
+        for label in ("Low", "Medium", "High", "Critical")
+    )
+    summary_cards += (
+        f'<div class="card total">'
+        f'<div class="count">{len(results)}</div>'
+        f'<div class="label">Total</div></div>'
+    )
+
+    rows = ""
+    for r in results:
+        lbl = r["label"].lower()
+        rows += (
+            f"<tr>"
+            f'<td><span class="dot dot-{lbl}"></span>{r["name"]}</td>'
+            f"<td>{r['current_version']}</td>"
+            f"<td>{r['latest_version']}</td>"
+            f"<td>{r['version_jump']}</td>"
+            f'<td class="score-{lbl}">{r["score"]}</td>'
+            f'<td class="score-{lbl}">{r["label"]}</td>'
+            f"<td>{_fmt_cves_html(r['cve_current'], r['cve_latest'])}</td>"
+            f"<td>{r['recommendation']}</td>"
+            f"</tr>\n"
+        )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scori report — {path}</title>
+<style>{_REPORT_CSS}</style>
+</head>
+<body>
+<h1>scori — friction report</h1>
+<p class="meta">Project: <strong>{path}</strong> &nbsp;·&nbsp; Generated: {now}</p>
+<div class="summary">{summary_cards}</div>
+<table>
+<thead><tr>
+<th>Package</th><th>Current</th><th>Latest</th>
+<th>Jump</th><th>Score</th><th>Label</th><th>CVEs</th><th>Recommendation</th>
+</tr></thead>
+<tbody>{rows}</tbody>
+</table>
+</body>
+</html>"""
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    deps = scan(args.path)
+    project_root = Path(args.path)
+    results: list[FrictionResult] = [
+        compute(d, project_root=project_root) for d in deps
+    ]
+    results.sort(key=lambda r: r["score"], reverse=True)
+
+    if args.format == "json":
+        content = jsonlib.dumps(results, indent=2)
+        if args.output:
+            Path(args.output).write_text(content, encoding="utf-8")
+            console.print(f"[green]JSON report written to {args.output}[/]")
+        else:
+            print(content)
+    else:
+        html = _build_rich_html(results, args.path)
+        out = args.output or "scori-report.html"
+        Path(out).write_text(html, encoding="utf-8")
+        console.print(f"[green]HTML report written to {out}[/]")
+
+    if args.ci:
+        over = [r for r in results if r["score"] > args.threshold]
+        if over:
+            names = ", ".join(r["name"] for r in over)
+            console.print(
+                f"[red]CI: {len(over)} "
+                f"dependenc{'y' if len(over) == 1 else 'ies'} "
+                f"exceeded threshold {args.threshold}: {names}[/]"
+            )
+            return 1
+        console.print(
+            f"[green]CI: all dependencies within threshold {args.threshold}[/]"
+        )
     return 0
 
 
@@ -411,7 +557,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_upd.set_defaults(func=_cmd_update)
 
-    # TODO v0.2: sub.add_parser("report")
+    p_rep = sub.add_parser(
+        "report", help="Generate a friction report (HTML or JSON)"
+    )
+    p_rep.add_argument("--path", default=".", help="Path to the target project")
+    p_rep.add_argument(
+        "--format", choices=["html", "json"], default="html",
+        help="Output format (default: html)",
+    )
+    p_rep.add_argument(
+        "--output", metavar="FILE",
+        help="Output file path (default: scori-report.html or stdout for json)",
+    )
+    p_rep.add_argument(
+        "--ci", action="store_true",
+        help="Exit with code 1 if any dependency exceeds the threshold",
+    )
+    p_rep.add_argument(
+        "--threshold", type=int, default=75, metavar="SCORE",
+        help="Score threshold for --ci (default: 75)",
+    )
+    p_rep.set_defaults(func=_cmd_report)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
