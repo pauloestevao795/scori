@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "scori scan",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scori",
+      "args": ["scan", "--path", "."],
+      "justMyCode": false
+    },
+    {
+      "name": "scori friction (json)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scori",
+      "args": ["friction", "--path", ".", "--format", "json"],
+      "justMyCode": false
+    },
+    {
+      "name": "scori friction (table)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scori",
+      "args": ["friction", "--path", ".", "--format", "table"],
+      "justMyCode": false
+    }
+  ]
+}

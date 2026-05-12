@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv / venv
+.venv/
+.python-version
+uv.lock
+
+# OS / IDE
+.DS_Store
+.idea/
+*.swp
+
+# Claude Code local config
+.claude/
+
+# scori
+.scori/
+scori-report.html

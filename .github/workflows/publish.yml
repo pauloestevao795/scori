@@ -1,0 +1,33 @@
+# Publica no PyPI ao fazer push de uma tag v* (ex.: v0.1.0).
+#
+# IMPORTANTE — antes do primeiro push é preciso configurar o Trusted
+# Publisher em https://pypi.org/manage/account/publishing/ com:
+#   PyPI Project Name : scori
+#   Owner             : <teu-user-github>
+#   Repository name   : scori
+#   Workflow filename : publish.yml
+#   Environment name  : pypi
+# Sem isso o passo "uv publish --trusted-publishing always" falha por
+# falta de credenciais — não há tokens nem secrets para configurar.
+
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/scori
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uv publish --trusted-publishing always
