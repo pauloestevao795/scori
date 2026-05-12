@@ -263,16 +263,19 @@ def _current_version_from_spec(
     package: str | None = None,
     project_root: Path | None = None,
 ) -> str:
-    """Best-effort: extract the pinned/minimum version from a PEP 440 specifier.
+    """Best-effort: resolve the current installed version of a dependency.
 
-    When spec is empty (unpinned), tries to resolve the installed version from
-    the project venv before falling back to "0.0.0".
+    Priority:
+      1. Venv inspection (actual installed version, most accurate)
+      2. Pinned version extracted from the specifier (e.g. ==2.31.0)
+      3. Lower bound from a range specifier (e.g. >=2.31 → 2.31)
+      4. "0.0.0" when nothing is resolvable
     """
+    if package and project_root:
+        installed = _venv_version(project_root, package)
+        if installed:
+            return installed
     if not spec:
-        if package and project_root:
-            installed = _venv_version(project_root, package)
-            if installed:
-                return installed
         return "0.0.0"
     m = re.search(r"(\d[\w.\-+]*)", spec)
     return m.group(1) if m else "0.0.0"
