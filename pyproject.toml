@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scori"
-version = "0.1.0"
+version = "0.2.0"
 description = "Software Composition Risk Intelligence — score the real cost of updating a dependency"
 readme = "README.md"
 license = "MIT"
@@ -35,13 +35,12 @@ Changelog = "https://github.com/pauloestevao795/scori/blob/main/CHANGELOG.md"
 
 [project.scripts]
 scori = "scori.__main__:main"
-# CLI v0.1 — available commands:
+# CLI commands:
 #   scori scan --path .
-#   scori friction --path . [--format json|table|html]
-# CLI v0.2+ (TODOs in code):
-#   scori monitor
-#   scori update --dry-run
-#   scori report
+#   scori friction --path . [--format json|table|html] [--ci] [--threshold N]
+#   scori monitor --path . [--watch] [--interval N]
+#   scori update --path . [--dry-run|--apply|--rollback] [--max-friction LABEL]
+#   scori report --path . [--format html|json] [--output FILE] [--ci]
 
 [dependency-groups]
 dev = [
