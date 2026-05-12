@@ -31,21 +31,21 @@ scori is a free, auth-free CLI for Python that quantifies the real cost of updat
 
 Complete the commands already declared in the CLI but not yet implemented.
 
-**`scori monitor`** ✅
+### `scori monitor` ✅
 
 - [x] Poll PyPI for new releases on all project dependencies
 - [x] Output a "updates available" table sorted by friction score (highest friction first)
 - [x] `--watch` flag for continuous monitoring with a configurable interval
 - [x] Highlight dependencies where a new release also fixes known CVEs (★ marker)
 
-**`scori update`**
+### `scori update` ✅
 
-- [ ] `--dry-run`: show a diff of what would change in the manifest without applying
-- [ ] `--apply`: apply updates and create an automatic backup of the original manifest
-- [ ] `--rollback`: restore the most recent backup
-- [ ] `--max-friction <label>`: only update deps at or below a given friction label (e.g. `medium`)
+- [x] `--dry-run`: show a diff of what would change in the manifest without applying
+- [x] `--apply`: apply updates and create an automatic backup of the original manifest
+- [x] `--rollback`: restore the most recent backup
+- [x] `--max-friction <label>`: only update deps at or below a given friction label (e.g. `medium`)
 
-**`scori report`**
+### `scori report`
 
 - [ ] Standalone HTML report with a visual traffic-light indicator per dependency
 - [ ] Structured JSON export suitable for CI/CD pipeline consumption
@@ -57,24 +57,24 @@ Complete the commands already declared in the CLI but not yet implemented.
 
 Improve the accuracy and depth of the friction score algorithm.
 
-**Real transitive dependency counts**
+### Real transitive dependency counts
 
 - [ ] Parse `poetry.lock` to count packages that depend on the package being updated
 - [ ] Parse `uv.lock` for the same
 - [ ] Use the resolved count in the score weight (currently always 0)
 
-**CVEs in the score**
+### CVEs in the score
 
 - [x] Incorporate OSV CVE count directly into the weighted algorithm (up to +15 pts)
 - [ ] Weight CVSS ≥ 9.0 CVEs more heavily than lower-severity ones
 
-**Improved breaking signal detection**
+### Improved breaking signal detection
 
 - [ ] Scan `CHANGELOG.md` from the GitHub repo in addition to release notes
 - [ ] Detect `BREAKING CHANGE:` in Conventional Commits commit history
 - [ ] Heuristic diff of `.pyi` type stub files between versions as an API-change signal
 
-**Broader version resolution**
+### Broader version resolution
 
 - [ ] Resolve unpinned versions via `conda list --json` when inside a conda environment
 - [ ] Support pyenv shims as a version source
@@ -86,18 +86,18 @@ Improve the accuracy and depth of the friction score algorithm.
 
 Bring scori into the workflows and tools developers already use.
 
-**GitHub Actions**
+### GitHub Actions
 
 - [ ] Official `scori-action` published to the GitHub Marketplace
 - [ ] Automatic PR comment with a friction table for any changed dependencies
 - [ ] Dynamic badge for `README.md` showing the project's average friction score
 
-**Pre-commit hook**
+### Pre-commit hook
 
 - [ ] Official hook for `.pre-commit-config.yaml`
 - [ ] Configurable threshold — block commit if any dep exceeds it
 
-**VSCode Extension** *(stretch goal)*
+### VSCode Extension *(stretch goal)*
 
 - [ ] Inline decoration showing the friction score per line in `requirements.txt` / `pyproject.toml`
 - [ ] CodeLens action: "Run scori friction on this package"
@@ -108,22 +108,22 @@ Bring scori into the workflows and tools developers already use.
 
 Higher-level features that turn scori from a scoring tool into a maintenance advisor.
 
-**Score history**
+### Score history
 
 - [ ] Track friction scores over time per project in local storage
 - [ ] Trend chart: surface dependencies that are becoming riskier over successive runs
 
-**Risk profiles**
+### Risk profiles
 
 - [ ] Per-project `.scori.toml` configuration for custom thresholds and weights
 - [ ] Built-in profiles: `conservative`, `balanced`, `aggressive`
 
-**Suggested update order**
+### Suggested update order
 
 - [ ] Rank dependencies by update order to minimise total migration risk
 - [ ] Detect conflicts between simultaneous updates (e.g. shared transitive dep with incompatible constraints)
 
-**LLM-assisted changelog summary** *(opt-in)*
+### LLM-assisted changelog summary *(opt-in)*
 
 - [ ] Plain-language summary of what changes in a given update
 - [ ] Supports local inference via Ollama or `OPENAI_API_KEY` — never required to use scori

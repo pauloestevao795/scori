@@ -32,13 +32,19 @@ scori monitor --path .
 scori monitor --path . --watch               # re-check every 5 minutes
 scori monitor --path . --watch --interval 60 # re-check every 60 s
 
+# Preview and apply dependency version updates
+scori update --path . --dry-run              # show what would change
+scori update --path . --apply                # write changes + create backup
+scori update --path . --apply --max-friction medium  # only Low/Medium deps
+scori update --path . --rollback             # restore from last backup
+
 # List all detected dependencies
 scori scan --path .
 ```
 
 Example output (`scori friction --format table`, with color indicators):
 
-```
+```text
                           scori — friction scores
 ┌───────────┬─────────┬─────────┬───────┬───────┬──────────┬─────────┐
 │ Package   │ Current │ Latest  │ Jump  │ Score │ Label    │  CVEs   │
@@ -103,7 +109,6 @@ For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directl
 
 ## Roadmap
 
-- **v0.2** — `scori update --dry-run`: simulates upgrade and re-scores
 - **v0.2** — `scori report`: rich HTML with charts and history
 - **v0.3** — support for `poetry.lock` and `uv.lock` for real transitive tree
 

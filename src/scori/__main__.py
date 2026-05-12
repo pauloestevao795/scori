@@ -4,9 +4,9 @@ Available commands:
     scori scan --path .
     scori friction --path . [--format json|table|html] [--ci [--threshold N]]
     scori monitor --path . [--watch [--interval N]]
+    scori update --path . [--dry-run | --apply [--max-friction LABEL] | --rollback]
 
 TODO v0.2+:
-    scori update --dry-run      # simulate upgrade and re-score
     scori report                # rich HTML with charts
 """
 
@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import json as jsonlib
+import re
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -207,6 +209,145 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
     return 0
 
 
+_LABEL_MAX_SCORE: dict[str, int] = {
+    "low": 25,
+    "medium": 50,
+    "high": 75,
+    "critical": 100,
+}
+_BACKUP_DIR = ".scori-backup"
+
+
+def _update_line(line: str, package: str, new_version: str) -> str | None:
+    """Replace the version specifier for package in one manifest line.
+
+    Returns the rewritten line, or None if the package is not on this line.
+    Handles requirements.txt, pyproject.toml, and setup.cfg formats.
+    """
+    pkg_pat = re.sub(r"[-_.]", r"[-_.]", re.escape(package))
+    m = re.match(
+        r'^(\s*["\']?)(' + pkg_pat + r')(\[.*?\])?(\s*)'
+        r'(==|>=|~=|!=|<=|>|<)([^\s,;"\'\\]+)',
+        line,
+        re.IGNORECASE,
+    )
+    if not m:
+        return None
+    prefix = line[:m.start(5)]   # everything before the operator
+    suffix = line[m.end():]      # everything after the version string
+    return f"{prefix}=={new_version}{suffix}"
+
+
+def _backup_manifests(project_root: Path, source_files: set[str]) -> Path:
+    backup_dir = project_root / _BACKUP_DIR
+    backup_dir.mkdir(exist_ok=True)
+    for sf in source_files:
+        src = project_root / sf
+        if src.exists():
+            shutil.copy2(src, backup_dir / sf)
+    return backup_dir
+
+
+def _cmd_update(args: argparse.Namespace) -> int:
+    project_root = Path(args.path).resolve()
+
+    if args.rollback:
+        backup_dir = project_root / _BACKUP_DIR
+        if not backup_dir.exists():
+            console.print(
+                "[red]No backup found. Run 'scori update --apply' first.[/]"
+            )
+            return 1
+        restored = [f for f in backup_dir.iterdir() if f.is_file()]
+        if not restored:
+            console.print("[red]Backup directory is empty.[/]")
+            return 1
+        for f in restored:
+            shutil.copy2(f, project_root / f.name)
+            console.print(f"[green]Restored {f.name}[/]")
+        console.print("[green]Rollback complete.[/]")
+        return 0
+
+    deps = scan(args.path)
+    results: list[FrictionResult] = [
+        compute(d, project_root=project_root) for d in deps
+    ]
+
+    max_score = (
+        _LABEL_MAX_SCORE.get(args.max_friction.lower(), 100)
+        if args.max_friction
+        else 100
+    )
+    to_update = [
+        r for r in results
+        if r["current_version"] != r["latest_version"]
+        and r["current_version"] != "0.0.0"
+        and r["score"] <= max_score
+    ]
+
+    if not to_update:
+        console.print("[green]No updates match the current filters.[/]")
+        return 0
+
+    dep_map = {d["name"].lower(): d["source_file"] for d in deps}
+    color_map = {
+        "Low": "green", "Medium": "yellow",
+        "High": "orange1", "Critical": "red",
+    }
+
+    mode = "dry run" if args.dry_run else "pending"
+    table = Table(title=f"scori update — {len(to_update)} update(s) [{mode}]")
+    table.add_column("Package")
+    table.add_column("Current → Latest")
+    table.add_column("Score")
+    table.add_column("File")
+    for r in to_update:
+        color = color_map.get(r["label"], "white")
+        table.add_row(
+            r["name"],
+            f"{r['current_version']} → [bold]{r['latest_version']}[/]",
+            f"[{color}]{r['score']} {r['label']}[/]",
+            dep_map.get(r["name"].lower(), "?"),
+        )
+    console.print(table)
+
+    if args.dry_run or not args.apply:
+        console.print(
+            "[dim]Dry run — no files modified. "
+            "Use --apply to write changes.[/]"
+        )
+        return 0
+
+    # Backup then apply
+    source_files = {
+        dep_map[r["name"].lower()]
+        for r in to_update
+        if r["name"].lower() in dep_map
+    }
+    backup_dir = _backup_manifests(project_root, source_files)
+    console.print(f"[dim]Backup saved to {backup_dir}[/]")
+
+    applied = 0
+    for r in to_update:
+        sf = dep_map.get(r["name"].lower())
+        if not sf:
+            continue
+        manifest = project_root / sf
+        lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
+        for i, line in enumerate(lines):
+            new_line = _update_line(line, r["name"], r["latest_version"])
+            if new_line is not None:
+                lines[i] = new_line
+                applied += 1
+                break
+        manifest.write_text("".join(lines), encoding="utf-8")
+
+    noun = "dependency" if applied == 1 else "dependencies"
+    console.print(f"[green]Updated {applied} {noun}.[/]")
+    console.print("[dim]To revert: scori update --rollback[/]")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scori")
     parser.add_argument("--version", action="version", version=f"scori {__version__}")
@@ -245,7 +386,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_mon.set_defaults(func=_cmd_monitor)
 
-    # TODO v0.2: sub.add_parser("update"), sub.add_parser("report")
+    p_upd = sub.add_parser(
+        "update", help="Update dependency versions in manifest files"
+    )
+    p_upd.add_argument("--path", default=".", help="Path to the target project")
+    upd_mode = p_upd.add_mutually_exclusive_group()
+    upd_mode.add_argument(
+        "--dry-run", action="store_true",
+        help="Show what would change without modifying files (default behaviour)",
+    )
+    upd_mode.add_argument(
+        "--apply", action="store_true",
+        help="Write updates to manifest files and create a backup",
+    )
+    upd_mode.add_argument(
+        "--rollback", action="store_true",
+        help="Restore manifest files from the last backup",
+    )
+    p_upd.add_argument(
+        "--max-friction",
+        metavar="LABEL",
+        choices=["low", "medium", "high", "critical"],
+        help="Only update deps at or below this label (low/medium/high/critical)",
+    )
+    p_upd.set_defaults(func=_cmd_update)
+
+    # TODO v0.2: sub.add_parser("report")
 
     args = parser.parse_args(argv)
     return int(args.func(args))

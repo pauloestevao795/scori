@@ -8,6 +8,13 @@ semantic versioning [SemVer](https://semver.org/).
 
 ### Added
 
+- `scori update` command with three modes:
+  - `--dry-run`: shows a table of pending version bumps without touching files
+  - `--apply`: writes updated versions to manifest files and creates a backup
+    in `.scori-backup/`
+  - `--rollback`: restores manifest files from the last backup
+  - `--max-friction <label>`: limits updates to deps at or below the given
+    friction label (`low`, `medium`, `high`, `critical`)
 - `scori monitor` command: shows only dependencies with available updates,
   sorted by friction score (highest first); marks with ★ packages where
   updating fixes known CVEs
