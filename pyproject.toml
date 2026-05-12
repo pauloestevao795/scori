@@ -22,9 +22,9 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-  "requests>=2.31",
-  "rich>=13.0",
-  "packaging>=24.0",
+  "requests>=2.32",
+  "rich>=13.7",
+  "packaging>=24.1",
 ]
 
 [project.urls]
@@ -45,11 +45,11 @@ scori = "scori.__main__:main"
 
 [dependency-groups]
 dev = [
-  "pytest>=8.0",
-  "pytest-cov>=5.0",
-  "mypy>=1.10",
-  "ruff>=0.5",
-  "pre-commit>=3.7",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "mypy>=1.11",
+  "ruff>=0.8",
+  "pre-commit>=3.8",
   "responses>=0.25",
   "types-requests",
 ]
