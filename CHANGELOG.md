@@ -30,7 +30,7 @@ semantic versioning [SemVer](https://semver.org/).
 - Installed version resolution for unpinned dependencies by inspecting the
   project's local venv (`.venv/`, `venv/`, `env/`)
 
-## [0.1.0] - YYYY-MM-DD
+## [0.1.0] - 2026-05-12
 
 ### Added
 
