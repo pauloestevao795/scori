@@ -72,6 +72,15 @@ whether they are fixed in the latest release:
 sorted by friction score (highest first), and marks with ★ any package where
 updating also fixes known CVEs.
 
+When a package has CVEs that are **not fixed in the latest version**, scori
+suggests curated safer alternatives below the table:
+
+```text
+⚠ Unresolved CVEs — consider these alternatives:
+  python-jose (3 CVEs, not fixed in latest) → joserfc, authlib
+  requests    (1 CVE,  not fixed in latest) → httpx
+```
+
 ## How it works
 
 The friction score is a weighted sum of five components (max 100):

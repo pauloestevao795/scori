@@ -116,3 +116,14 @@ def test_dependency_typeddict() -> None:
         "source_file": "pyproject.toml",
     }
     assert d["name"] == "x"
+
+
+def test_suggest_alternatives_known() -> None:
+    from scori.friction import _suggest_alternatives
+    assert "httpx" in _suggest_alternatives("requests")
+    assert "joserfc" in _suggest_alternatives("python-jose")
+
+
+def test_suggest_alternatives_unknown() -> None:
+    from scori.friction import _suggest_alternatives
+    assert _suggest_alternatives("some-unknown-lib") == []

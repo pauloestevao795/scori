@@ -26,3 +26,4 @@ class FrictionResult(TypedDict):
     recommendation: str
     cve_current: int           # CVEs in current version (-1 = version unresolved)
     cve_latest: int            # CVEs in latest version
+    alternatives: list[str]   # suggested replacements when CVEs have no fix

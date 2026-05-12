@@ -88,6 +88,59 @@ def _fetch_osv_count(package: str, version: str) -> int:
     return count
 
 
+# Curated map of packages with known vulnerability histories and their safer
+# alternatives. Used when a package has CVEs that are not fixed in latest.
+# Keys are normalised (lowercase, hyphens). Values are ordered by preference.
+_ALTERNATIVES: dict[str, list[str]] = {
+    # HTTP clients
+    "requests": ["httpx"],
+    "urllib3": ["httpx"],
+    "aiohttp": ["httpx"],
+    # JWT / auth
+    "pyjwt": ["authlib"],
+    "python-jose": ["joserfc", "authlib"],
+    "itsdangerous": ["authlib"],
+    # Cryptography
+    "pycrypto": ["cryptography", "pycryptodome"],
+    "pycryptodome": ["cryptography"],
+    "pyopenssl": ["truststore"],
+    "paramiko": ["asyncssh"],
+    # HTML / XML parsing
+    "lxml": ["defusedxml", "html5lib"],
+    "bleach": ["nh3"],
+    "markdown2": ["mistune", "markdown"],
+    # YAML / config
+    "pyyaml": ["tomllib", "ruamel.yaml"],
+    "pyaml": ["tomllib", "ruamel.yaml"],
+    # Image processing
+    "pillow": ["wand", "imageio"],
+    # Task queues
+    "celery": ["dramatiq", "rq"],
+    # WSGI / ASGI frameworks
+    "flask": ["fastapi", "starlette"],
+    "werkzeug": ["starlette"],
+    # Database
+    "pymongo": ["motor"],
+    "mysqlclient": ["aiomysql", "asyncpg"],
+    # Serialisation
+    "pickle": ["msgspec", "orjson"],
+    "simplejson": ["orjson", "msgspec"],
+    # PDF
+    "pypdf2": ["pypdf", "pdfminer.six"],
+    "reportlab": ["weasyprint"],
+    # Templating
+    "mako": ["jinja2"],
+    # SSH / remote
+    "fabric": ["asyncssh"],
+}
+
+
+def _suggest_alternatives(package: str) -> list[str]:
+    """Return curated safer alternatives for a package name."""
+    key = re.sub(r"[-_.]", "-", package).lower()
+    return _ALTERNATIVES.get(key, [])
+
+
 BREAKING_KEYWORDS = [
     "breaking",
     "removed",
@@ -319,6 +372,10 @@ def compute(
     )
     label, recommendation = _label(score)
 
+    # Suggest alternatives only when CVEs are present and updating won't fix them
+    unresolved_cves = cve_current > 0 and cve_latest >= cve_current
+    alternatives = _suggest_alternatives(dep["name"]) if unresolved_cves else []
+
     return FrictionResult(
         name=dep["name"],
         current_version=current,
@@ -333,4 +390,5 @@ def compute(
         recommendation=recommendation,
         cve_current=cve_current,
         cve_latest=cve_latest,
+        alternatives=alternatives,
     )

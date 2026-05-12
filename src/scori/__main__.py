@@ -54,6 +54,21 @@ def _fmt_cves(current: int, latest: int) -> str:
     return f"[yellow]→ {latest}[/]"  # new CVE appeared in latest
 
 
+def _print_alternatives(results: list[FrictionResult]) -> None:
+    flagged = [r for r in results if r["alternatives"]]
+    if not flagged:
+        return
+    console.print()
+    console.print("[bold yellow]⚠ Unresolved CVEs — consider these alternatives:[/]")
+    for r in flagged:
+        alts = ", ".join(f"[cyan]{a}[/]" for a in r["alternatives"])
+        console.print(
+            f"  [red]{r['name']}[/] "
+            f"([red]{r['cve_current']} CVE{'s' if r['cve_current'] != 1 else ''}[/], "
+            f"not fixed in latest) → {alts}"
+        )
+
+
 def _format_table(results: list[FrictionResult]) -> None:
     table = Table(title="scori — friction scores")
     table.add_column("Package")
@@ -116,6 +131,7 @@ def _cmd_friction(args: argparse.Namespace) -> int:
         console.print(f"[green]HTML report written to {out}[/]")
     else:
         _format_table(results)
+        _print_alternatives(results)
     if args.ci:
         over = [r for r in results if r["score"] > args.threshold]
         if over:
@@ -191,6 +207,7 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
 
         if updates:
             _format_monitor_table(updates)
+            _print_alternatives(updates)
         else:
             console.print("[green]All dependencies are up to date.[/]")
 
@@ -243,6 +260,14 @@ tr:hover td { background: #1c2128; }
 .cve-fixed { color: #3fb950; }
 .cve-bad { color: #f85149; }
 .cve-none { color: #8b949e; }
+.alts { margin-top: 2rem; }
+.alts h2 { font-size: 1rem; color: #d29922; margin-bottom: .75rem; }
+.alt-row { display: flex; align-items: baseline; gap: .5rem;
+           padding: .4rem 0; border-bottom: 1px solid #21262d; font-size: .9rem; }
+.alt-pkg { color: #f85149; font-weight: 600; min-width: 160px; }
+.alt-badge { background: #1f2d1f; color: #3fb950; border: 1px solid #3fb950;
+             border-radius: 4px; padding: .1rem .4rem; font-size: .78rem;
+             white-space: nowrap; }
 """
 
 
@@ -295,6 +320,31 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
             f"</tr>\n"
         )
 
+    flagged = [r for r in results if r["alternatives"]]
+    alts_section = ""
+    if flagged:
+        def _alt_badges(alts: list[str]) -> str:
+            return "".join(
+                '<span class="alt-badge">' + a + "</span>" for a in alts
+            )
+
+        alt_rows = "".join(
+            '<div class="alt-row">'
+            '<span class="alt-pkg">' + r["name"] + "</span>"
+            '<span style="color:#8b949e;font-size:.82rem">'
+            + str(r["cve_current"])
+            + " CVE(s) — not fixed in latest</span>"
+            '<span style="flex:1"></span>'
+            + _alt_badges(r["alternatives"])
+            + "</div>\n"
+            for r in flagged
+        )
+        alts_section = (
+            f'<div class="alts">'
+            f"<h2>⚠ Unresolved CVEs — consider these alternatives</h2>"
+            f"{alt_rows}</div>"
+        )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -314,6 +364,7 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
 </tr></thead>
 <tbody>{rows}</tbody>
 </table>
+{alts_section}
 </body>
 </html>"""
 
