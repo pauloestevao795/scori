@@ -1,10 +1,13 @@
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import responses as rsps
 
 from scori._types import Dependency
 from scori.friction import (
+    _alternatives_cache,
     _current_version_from_spec,
+    _fetch_alternatives_online,
     _fetch_osv_count,
     _label,
     _osv_cache,
@@ -118,12 +121,45 @@ def test_dependency_typeddict() -> None:
     assert d["name"] == "x"
 
 
-def test_suggest_alternatives_known() -> None:
-    from scori.friction import _suggest_alternatives
-    assert "httpx" in _suggest_alternatives("requests")
-    assert "joserfc" in _suggest_alternatives("python-jose")
+@rsps.activate
+def test_fetch_alternatives_online_returns_safe_package() -> None:
+    _alternatives_cache.clear()
+    _osv_cache.clear()
+
+    pypi_data = {"info": {"keywords": "http client rest", "classifiers": []}}
+
+    xmlrpc_result = [{"name": "httpx"}, {"name": "requests"}]
+    mock_client = MagicMock()
+    mock_client.search.return_value = xmlrpc_result
+
+    rsps.add(
+        rsps.GET,
+        "https://pypi.org/pypi/httpx/json",
+        json={"info": {"version": "0.27.0"}},
+        status=200,
+    )
+    rsps.add(
+        rsps.POST,
+        "https://api.osv.dev/v1/query",
+        json={},
+        status=200,
+    )
+
+    with patch("xmlrpc.client.ServerProxy", return_value=mock_client):
+        result = _fetch_alternatives_online("requests", pypi_data)
+
+    assert "httpx" in result
 
 
-def test_suggest_alternatives_unknown() -> None:
-    from scori.friction import _suggest_alternatives
-    assert _suggest_alternatives("some-unknown-lib") == []
+def test_fetch_alternatives_online_no_keywords() -> None:
+    _alternatives_cache.clear()
+    pypi_data: dict = {"info": {"keywords": "", "classifiers": []}}
+    result = _fetch_alternatives_online("some-unknown-lib", pypi_data)
+    assert result == []
+
+
+def test_fetch_alternatives_online_uses_cache() -> None:
+    _alternatives_cache["cached-pkg"] = ["safepkg"]
+    pypi_data: dict = {"info": {"keywords": "x y z", "classifiers": []}}
+    result = _fetch_alternatives_online("cached-pkg", pypi_data)
+    assert result == ["safepkg"]

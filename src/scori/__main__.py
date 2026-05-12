@@ -199,7 +199,8 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
         ]
 
         updates = [
-            r for r in all_results
+            r
+            for r in all_results
             if r["current_version"] != r["latest_version"]
             and r["current_version"] != "0.0.0"
         ]
@@ -214,9 +215,7 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
         if not args.watch:
             break
 
-        console.print(
-            f"\n[dim]Checking every {args.interval}s — Ctrl+C to stop.[/]"
-        )
+        console.print(f"\n[dim]Checking every {args.interval}s — Ctrl+C to stop.[/]")
         try:
             time.sleep(args.interval)
         except KeyboardInterrupt:
@@ -283,7 +282,7 @@ def _fmt_cves_html(current: int, latest: int) -> str:
         return f'<span class="cve-bad">{current}</span> → {latest}'
     if current > 0:
         return f'<span class="cve-bad">{current}</span>'
-    return f'→ {latest}'
+    return f"→ {latest}"
 
 
 def _build_rich_html(results: list[FrictionResult], path: str) -> str:
@@ -323,10 +322,9 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
     flagged = [r for r in results if r["alternatives"]]
     alts_section = ""
     if flagged:
+
         def _alt_badges(alts: list[str]) -> str:
-            return "".join(
-                '<span class="alt-badge">' + a + "</span>" for a in alts
-            )
+            return "".join('<span class="alt-badge">' + a + "</span>" for a in alts)
 
         alt_rows = "".join(
             '<div class="alt-row">'
@@ -334,9 +332,7 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
             '<span style="color:#8b949e;font-size:.82rem">'
             + str(r["cve_current"])
             + " CVE(s) — not fixed in latest</span>"
-            '<span style="flex:1"></span>'
-            + _alt_badges(r["alternatives"])
-            + "</div>\n"
+            '<span style="flex:1"></span>' + _alt_badges(r["alternatives"]) + "</div>\n"
             for r in flagged
         )
         alts_section = (
@@ -423,15 +419,15 @@ def _update_line(line: str, package: str, new_version: str) -> str | None:
     """
     pkg_pat = re.sub(r"[-_.]", r"[-_.]", re.escape(package))
     m = re.match(
-        r'^(\s*["\']?)(' + pkg_pat + r')(\[.*?\])?(\s*)'
+        r'^(\s*["\']?)(' + pkg_pat + r")(\[.*?\])?(\s*)"
         r'(==|>=|~=|!=|<=|>|<)([^\s,;"\'\\]+)',
         line,
         re.IGNORECASE,
     )
     if not m:
         return None
-    prefix = line[:m.start(5)]   # everything before the operator
-    suffix = line[m.end():]      # everything after the version string
+    prefix = line[: m.start(5)]  # everything before the operator
+    suffix = line[m.end() :]  # everything after the version string
     return f"{prefix}=={new_version}{suffix}"
 
 
@@ -451,9 +447,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
     if args.rollback:
         backup_dir = project_root / _BACKUP_DIR
         if not backup_dir.exists():
-            console.print(
-                "[red]No backup found. Run 'scori update --apply' first.[/]"
-            )
+            console.print("[red]No backup found. Run 'scori update --apply' first.[/]")
             return 1
         restored = [f for f in backup_dir.iterdir() if f.is_file()]
         if not restored:
@@ -476,7 +470,8 @@ def _cmd_update(args: argparse.Namespace) -> int:
         else 100
     )
     to_update = [
-        r for r in results
+        r
+        for r in results
         if r["current_version"] != r["latest_version"]
         and r["current_version"] != "0.0.0"
         and r["score"] <= max_score
@@ -488,8 +483,10 @@ def _cmd_update(args: argparse.Namespace) -> int:
 
     dep_map = {d["name"].lower(): d["source_file"] for d in deps}
     color_map = {
-        "Low": "green", "Medium": "yellow",
-        "High": "orange1", "Critical": "red",
+        "Low": "green",
+        "Medium": "yellow",
+        "High": "orange1",
+        "Critical": "red",
     }
 
     mode = "dry run" if args.dry_run else "pending"
@@ -510,16 +507,13 @@ def _cmd_update(args: argparse.Namespace) -> int:
 
     if args.dry_run or not args.apply:
         console.print(
-            "[dim]Dry run — no files modified. "
-            "Use --apply to write changes.[/]"
+            "[dim]Dry run — no files modified. Use --apply to write changes.[/]"
         )
         return 0
 
     # Backup then apply
     source_files = {
-        dep_map[r["name"].lower()]
-        for r in to_update
-        if r["name"].lower() in dep_map
+        dep_map[r["name"].lower()] for r in to_update if r["name"].lower() in dep_map
     }
     backup_dir = _backup_manifests(project_root, source_files)
     console.print(f"[dim]Backup saved to {backup_dir}[/]")
@@ -556,15 +550,17 @@ def main(argv: list[str] | None = None) -> int:
 
     p_fric = sub.add_parser("friction", help="Compute friction score per dependency")
     p_fric.add_argument("--path", default=".", help="Path to the target project")
+    p_fric.add_argument("--format", choices=["json", "table", "html"], default="table")
     p_fric.add_argument(
-        "--format", choices=["json", "table", "html"], default="table"
-    )
-    p_fric.add_argument(
-        "--ci", action="store_true",
+        "--ci",
+        action="store_true",
         help="Exit with code 1 if any dependency exceeds the threshold",
     )
     p_fric.add_argument(
-        "--threshold", type=int, default=75, metavar="SCORE",
+        "--threshold",
+        type=int,
+        default=75,
+        metavar="SCORE",
         help="Score threshold for --ci (default: 75)",
     )
     p_fric.set_defaults(func=_cmd_friction)
@@ -574,11 +570,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_mon.add_argument("--path", default=".", help="Path to the target project")
     p_mon.add_argument(
-        "--watch", action="store_true",
+        "--watch",
+        action="store_true",
         help="Poll continuously for new releases",
     )
     p_mon.add_argument(
-        "--interval", type=int, default=300, metavar="SECONDS",
+        "--interval",
+        type=int,
+        default=300,
+        metavar="SECONDS",
         help="Polling interval in seconds when --watch is active (default: 300)",
     )
     p_mon.set_defaults(func=_cmd_monitor)
@@ -589,15 +589,18 @@ def main(argv: list[str] | None = None) -> int:
     p_upd.add_argument("--path", default=".", help="Path to the target project")
     upd_mode = p_upd.add_mutually_exclusive_group()
     upd_mode.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Show what would change without modifying files (default behaviour)",
     )
     upd_mode.add_argument(
-        "--apply", action="store_true",
+        "--apply",
+        action="store_true",
         help="Write updates to manifest files and create a backup",
     )
     upd_mode.add_argument(
-        "--rollback", action="store_true",
+        "--rollback",
+        action="store_true",
         help="Restore manifest files from the last backup",
     )
     p_upd.add_argument(
@@ -608,24 +611,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_upd.set_defaults(func=_cmd_update)
 
-    p_rep = sub.add_parser(
-        "report", help="Generate a friction report (HTML or JSON)"
-    )
+    p_rep = sub.add_parser("report", help="Generate a friction report (HTML or JSON)")
     p_rep.add_argument("--path", default=".", help="Path to the target project")
     p_rep.add_argument(
-        "--format", choices=["html", "json"], default="html",
+        "--format",
+        choices=["html", "json"],
+        default="html",
         help="Output format (default: html)",
     )
     p_rep.add_argument(
-        "--output", metavar="FILE",
+        "--output",
+        metavar="FILE",
         help="Output file path (default: scori-report.html or stdout for json)",
     )
     p_rep.add_argument(
-        "--ci", action="store_true",
+        "--ci",
+        action="store_true",
         help="Exit with code 1 if any dependency exceeds the threshold",
     )
     p_rep.add_argument(
-        "--threshold", type=int, default=75, metavar="SCORE",
+        "--threshold",
+        type=int,
+        default=75,
+        metavar="SCORE",
         help="Score threshold for --ci (default: 75)",
     )
     p_rep.set_defaults(func=_cmd_report)

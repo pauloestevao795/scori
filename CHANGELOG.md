@@ -8,12 +8,13 @@ semantic versioning [SemVer](https://semver.org/).
 
 ### Added
 
-- Alternative library suggestions for packages with unresolved CVEs (i.e.
-  vulnerabilities that are still present in the latest version): a curated
-  map of ~35 common Python packages surfaces safer drop-in replacements
-  (e.g. `requests` → `httpx`, `python-jose` → `joserfc` / `authlib`,
-  `pyyaml` → `tomllib` / `ruamel.yaml`). Suggestions appear below the
-  friction table in the CLI and in a dedicated section in the HTML report.
+- Dynamic alternative library discovery for packages with unresolved CVEs:
+  scori extracts keywords from the vulnerable package's PyPI metadata, queries
+  the PyPI XMLRPC search API for similar packages, and cross-checks each
+  candidate against the OSV database — returning up to 3 alternatives with
+  0 known vulnerabilities. No hardcoded list; results are cached in-memory per
+  run. Suggestions appear below the friction table in the CLI and in a
+  dedicated section in the HTML report.
 - `scori report` command: generates a polished standalone report
   - `--format html` (default): dark-theme HTML with traffic-light indicators,
     summary cards by label, and per-dependency recommendations; sorted by

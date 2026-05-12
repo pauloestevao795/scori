@@ -27,6 +27,7 @@ import json
 import os
 import re
 import time
+import xmlrpc.client
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -60,8 +61,9 @@ def _venv_version(project_root: Path, package: str) -> str | None:
                     continue
                 dist_key = re.sub(r"[-_.]+", "_", stem[:idx]).lower()
                 if dist_key == pkg_key:
-                    return stem[idx + 1:]
+                    return stem[idx + 1 :]
     return None
+
 
 # In-memory cache for OSV results within a single scori run.
 _osv_cache: dict[tuple[str, str], int] = {}
@@ -88,57 +90,74 @@ def _fetch_osv_count(package: str, version: str) -> int:
     return count
 
 
-# Curated map of packages with known vulnerability histories and their safer
-# alternatives. Used when a package has CVEs that are not fixed in latest.
-# Keys are normalised (lowercase, hyphens). Values are ordered by preference.
-_ALTERNATIVES: dict[str, list[str]] = {
-    # HTTP clients
-    "requests": ["httpx"],
-    "urllib3": ["httpx"],
-    "aiohttp": ["httpx"],
-    # JWT / auth
-    "pyjwt": ["authlib"],
-    "python-jose": ["joserfc", "authlib"],
-    "itsdangerous": ["authlib"],
-    # Cryptography
-    "pycrypto": ["cryptography", "pycryptodome"],
-    "pycryptodome": ["cryptography"],
-    "pyopenssl": ["truststore"],
-    "paramiko": ["asyncssh"],
-    # HTML / XML parsing
-    "lxml": ["defusedxml", "html5lib"],
-    "bleach": ["nh3"],
-    "markdown2": ["mistune", "markdown"],
-    # YAML / config
-    "pyyaml": ["tomllib", "ruamel.yaml"],
-    "pyaml": ["tomllib", "ruamel.yaml"],
-    # Image processing
-    "pillow": ["wand", "imageio"],
-    # Task queues
-    "celery": ["dramatiq", "rq"],
-    # WSGI / ASGI frameworks
-    "flask": ["fastapi", "starlette"],
-    "werkzeug": ["starlette"],
-    # Database
-    "pymongo": ["motor"],
-    "mysqlclient": ["aiomysql", "asyncpg"],
-    # Serialisation
-    "pickle": ["msgspec", "orjson"],
-    "simplejson": ["orjson", "msgspec"],
-    # PDF
-    "pypdf2": ["pypdf", "pdfminer.six"],
-    "reportlab": ["weasyprint"],
-    # Templating
-    "mako": ["jinja2"],
-    # SSH / remote
-    "fabric": ["asyncssh"],
-}
+_alternatives_cache: dict[str, list[str]] = {}
 
 
-def _suggest_alternatives(package: str) -> list[str]:
-    """Return curated safer alternatives for a package name."""
-    key = re.sub(r"[-_.]", "-", package).lower()
-    return _ALTERNATIVES.get(key, [])
+def _fetch_alternatives_online(package: str, pypi_data: dict[str, Any]) -> list[str]:
+    """Search PyPI for packages sharing keywords and verify they have 0 CVEs.
+
+    Uses the PyPI XMLRPC search API with keywords extracted from the vulnerable
+    package's own metadata, then cross-checks each candidate against the OSV
+    database. Returns up to 3 alternatives with no known vulnerabilities.
+    """
+    pkg_key = package.lower()
+    if pkg_key in _alternatives_cache:
+        return _alternatives_cache[pkg_key]
+
+    info = pypi_data.get("info") or {}
+    raw_keywords: str = info.get("keywords") or ""
+    classifiers: list[str] = info.get("classifiers") or []
+
+    # Build a search query from the package keywords
+    terms = [t.strip() for t in re.split(r"[,\s]+", raw_keywords) if len(t.strip()) > 2]
+    # Supplement with topic classifiers (e.g. "Topic :: Internet :: WWW/HTTP")
+    for c in classifiers:
+        if c.startswith("Topic ::"):
+            parts = c.split(" :: ")
+            terms.extend(p.strip() for p in parts[1:] if len(p.strip()) > 3)
+
+    if not terms:
+        _alternatives_cache[pkg_key] = []
+        return []
+
+    query = " ".join(terms[:5])  # keep the query short
+
+    try:
+        client = xmlrpc.client.ServerProxy("https://pypi.org/pypi", use_datetime=True)
+        raw: Any = client.search({"name": query, "summary": query}, "or")
+        hits: list[Any] = raw if isinstance(raw, list) else []
+    except Exception:
+        _alternatives_cache[pkg_key] = []
+        return []
+
+    pkg_norm = re.sub(r"[-_.]+", "-", package).lower()
+    seen: set[str] = {pkg_norm}
+    candidates: list[str] = []
+    for hit in hits[:30]:
+        name = (hit.get("name") or "").strip()
+        if not name:
+            continue
+        norm = re.sub(r"[-_.]+", "-", name).lower()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        # Resolve latest version for this candidate
+        try:
+            r = requests.get(f"https://pypi.org/pypi/{name}/json", timeout=5)
+            if not r.ok:
+                continue
+            candidate_latest = (r.json().get("info") or {}).get("version") or ""
+            if not candidate_latest:
+                continue
+        except requests.RequestException:
+            continue
+        if _fetch_osv_count(name, candidate_latest) == 0:
+            candidates.append(name)
+        if len(candidates) >= 3:
+            break
+
+    _alternatives_cache[pkg_key] = candidates
+    return candidates
 
 
 BREAKING_KEYWORDS = [
@@ -374,7 +393,9 @@ def compute(
 
     # Suggest alternatives only when CVEs are present and updating won't fix them
     unresolved_cves = cve_current > 0 and cve_latest >= cve_current
-    alternatives = _suggest_alternatives(dep["name"]) if unresolved_cves else []
+    alternatives = (
+        _fetch_alternatives_online(dep["name"], data["pypi"]) if unresolved_cves else []
+    )
 
     return FrictionResult(
         name=dep["name"],

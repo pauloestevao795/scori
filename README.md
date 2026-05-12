@@ -73,13 +73,19 @@ sorted by friction score (highest first), and marks with ★ any package where
 updating also fixes known CVEs.
 
 When a package has CVEs that are **not fixed in the latest version**, scori
-suggests curated safer alternatives below the table:
+searches PyPI online for alternatives with 0 known vulnerabilities and suggests
+them below the table:
 
 ```text
 ⚠ Unresolved CVEs — consider these alternatives:
   python-jose (3 CVEs, not fixed in latest) → joserfc, authlib
   requests    (1 CVE,  not fixed in latest) → httpx
 ```
+
+Alternatives are discovered dynamically: scori extracts keywords from the
+vulnerable package's PyPI metadata, searches for similar packages, and verifies
+each candidate against the OSV database before suggesting it. No hardcoded list
+— any package on PyPI is a potential alternative.
 
 ## How it works
 
