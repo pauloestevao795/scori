@@ -8,8 +8,8 @@ from scori.friction import (
     _fetch_osv_count,
     _label,
     _osv_cache,
-    _version_jump,
     _venv_version,
+    _version_jump,
 )
 
 

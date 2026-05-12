@@ -104,7 +104,9 @@ def _format_html(results: list[FrictionResult]) -> str:
 def _cmd_friction(args: argparse.Namespace) -> int:
     deps = scan(args.path)
     project_root = Path(args.path)
-    results: list[FrictionResult] = [compute(d, project_root=project_root) for d in deps]
+    results: list[FrictionResult] = [
+        compute(d, project_root=project_root) for d in deps
+    ]
     if args.format == "json":
         print(jsonlib.dumps(results, indent=2))
     elif args.format == "html":
@@ -122,7 +124,9 @@ def _cmd_friction(args: argparse.Namespace) -> int:
                 f"exceeded threshold {args.threshold}: {names}[/]"
             )
             return 1
-        console.print(f"[green]CI: all dependencies within threshold {args.threshold}[/]")
+        console.print(
+            f"[green]CI: all dependencies within threshold {args.threshold}[/]"
+        )
     return 0
 
 
@@ -157,7 +161,10 @@ def _format_monitor_table(results: list[FrictionResult]) -> None:
             cve_cell,
         )
     console.print(table)
-    if any(r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"] for r in results):
+    fixes_any = any(
+        r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"] for r in results
+    )
+    if fixes_any:
         console.print("[dim]★ updating this package fixes known CVEs[/]")
 
 

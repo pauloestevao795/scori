@@ -27,7 +27,7 @@ import json
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -75,7 +75,10 @@ def _fetch_osv_count(package: str, version: str) -> int:
     try:
         r = requests.post(
             "https://api.osv.dev/v1/query",
-            json={"version": version, "package": {"name": package, "ecosystem": "PyPI"}},
+            json={
+                "version": version,
+                "package": {"name": package, "ecosystem": "PyPI"},
+            },
             timeout=10,
         )
         count = len(r.json().get("vulns") or []) if r.ok else 0
@@ -199,7 +202,10 @@ def _version_jump(current: str, latest: str) -> tuple[VersionJump, int]:
 def _scan_breaking(
     releases: list[dict[str, Any]], current: str, latest: str
 ) -> list[str]:
-    """Search for breaking-change keywords in release notes between current (excl.) and latest (incl.)."""
+    """Search release notes for breaking keywords.
+
+    Scans releases between current (exclusive) and latest (inclusive).
+    """
     try:
         cv = Version(current)
         lv = Version(latest)
@@ -224,7 +230,8 @@ def _scan_breaking(
 
 def _months_outdated(pypi: dict[str, Any], current: str) -> float:
     rels = (pypi.get("releases") or {}).get(current) or []
-    uploads = [r.get("upload_time_iso_8601") for r in rels if r.get("upload_time_iso_8601")]
+    key = "upload_time_iso_8601"
+    uploads = [r.get(key) for r in rels if r.get(key)]
     if not uploads:
         return 0.0
     ts = min(uploads)
@@ -232,7 +239,7 @@ def _months_outdated(pypi: dict[str, Any], current: str) -> float:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     except ValueError:
         return 0.0
-    delta = datetime.now(timezone.utc) - dt
+    delta = datetime.now(UTC) - dt
     return round(delta.days / 30.0, 1)
 
 
@@ -304,7 +311,9 @@ def compute(
     fixed_cves = max(0, cve_current - cve_latest) if cve_current > 0 else 0
     cve_pts = min(15, fixed_cves * 3)
 
-    score = min(100, jump_pts + signal_pts + transitive_pts + months_pts + yanked_pts + cve_pts)
+    score = min(
+        100, jump_pts + signal_pts + transitive_pts + months_pts + yanked_pts + cve_pts
+    )
     label, recommendation = _label(score)
 
     return FrictionResult(
