@@ -85,17 +85,55 @@ def _from_setup_cfg(path: Path) -> list[Dependency]:
     return deps
 
 
+_SKIP_DIRS = frozenset({
+    ".venv", "venv", "env", ".env",
+    "node_modules", "site-packages", "dist-packages",
+    "__pycache__", ".git", ".tox", ".nox", "build", "dist",
+    ".eggs", "*.egg-info",
+})
+
+_PARSERS: dict[str, Any] = {
+    "pyproject.toml": _from_pyproject,
+    "setup.cfg": _from_setup_cfg,
+}
+
+
+def _req_glob(root: Path) -> list[Path]:
+    """Return all requirements*.txt files under root, excluding venv dirs."""
+    results = []
+    for p in root.rglob("requirements*.txt"):
+        if not any(part in _SKIP_DIRS for part in p.parts):
+            results.append(p)
+    return results
+
+
 def scan(project_path: str | Path) -> list[Dependency]:
-    """Read all supported manifests in ``project_path``."""
+    """Read all supported manifests under ``project_path``, recursively.
+
+    Skips virtual-environment and build artifact directories so that
+    packages installed in .venv/site-packages are not mistaken for
+    direct dependencies.
+    """
     root = Path(project_path)
     deps: list[Dependency] = []
-    candidates = {
-        "requirements.txt": _from_requirements_txt,
-        "pyproject.toml": _from_pyproject,
-        "setup.cfg": _from_setup_cfg,
-    }
-    for fname, parser in candidates.items():
-        fpath = root / fname
-        if fpath.exists():
-            deps.extend(parser(fpath))
+    seen_names: set[str] = set()
+
+    def _add(new_deps: list[Dependency]) -> None:
+        for d in new_deps:
+            key = d["name"].lower()
+            if key not in seen_names:
+                seen_names.add(key)
+                deps.append(d)
+
+    # requirements*.txt — recurse
+    for req_path in sorted(_req_glob(root)):
+        _add(_from_requirements_txt(req_path))
+
+    # pyproject.toml / setup.cfg — recurse, skip venv dirs
+    for fname, parser in _PARSERS.items():
+        for manifest in sorted(root.rglob(fname)):
+            if any(part in _SKIP_DIRS for part in manifest.parts):
+                continue
+            _add(parser(manifest))
+
     return deps
