@@ -23,11 +23,25 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
-from ._types import FrictionResult
+from ._types import Dependency, FrictionResult
 from .friction import compute
+from .lockfile import load_transitive_counts
 from .scanner import scan
 
 console = Console()
+
+
+def _compute_all(deps: list[Dependency], project_root: Path) -> list[FrictionResult]:
+
+    transitive = load_transitive_counts(project_root)
+    return [
+        compute(
+            d,
+            transitive_affected=transitive.get(d["name"].lower(), 0),
+            project_root=project_root,
+        )
+        for d in deps
+    ]
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
@@ -120,9 +134,7 @@ def _format_html(results: list[FrictionResult]) -> str:
 def _cmd_friction(args: argparse.Namespace) -> int:
     deps = scan(args.path)
     project_root = Path(args.path)
-    results: list[FrictionResult] = [
-        compute(d, project_root=project_root) for d in deps
-    ]
+    results = _compute_all(deps, project_root)
     if args.format == "json":
         print(jsonlib.dumps(results, indent=2))
     elif args.format == "html":
@@ -194,9 +206,7 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
 
         deps = scan(args.path)
         project_root = Path(args.path)
-        all_results: list[FrictionResult] = [
-            compute(d, project_root=project_root) for d in deps
-        ]
+        all_results = _compute_all(deps, project_root)
 
         updates = [
             r
@@ -368,9 +378,7 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
 def _cmd_report(args: argparse.Namespace) -> int:
     deps = scan(args.path)
     project_root = Path(args.path)
-    results: list[FrictionResult] = [
-        compute(d, project_root=project_root) for d in deps
-    ]
+    results = _compute_all(deps, project_root)
     results.sort(key=lambda r: r["score"], reverse=True)
 
     if args.format == "json":
@@ -460,9 +468,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
         return 0
 
     deps = scan(args.path)
-    results: list[FrictionResult] = [
-        compute(d, project_root=project_root) for d in deps
-    ]
+    results = _compute_all(deps, project_root)
 
     max_score = (
         _LABEL_MAX_SCORE.get(args.max_friction.lower(), 100)

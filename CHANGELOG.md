@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Real transitive dependency counts via `uv.lock` / `poetry.lock` parsing:
+  scori now reads the lockfile at the project root and counts how many other
+  packages depend on the package being evaluated (reverse-dep count). This
+  number feeds directly into the friction score (`+3 per dep, max 15`).
+  Falls back to 0 when no lockfile is present. Supports both `uv.lock`
+  (TOML-based) and `poetry.lock` formats.
+- CVSS-weighted CVE scoring: CRITICAL-severity vulnerabilities (as reported
+  by the GitHub Advisory Database via OSV `database_specific.severity`) now
+  count double in the friction score calculation. A package with one CRITICAL
+  CVE fixed by updating scores higher than a package with one LOW CVE fixed,
+  pushing more urgent updates to the top of the queue.
+- CHANGELOG.md scanning as an additional breaking signal source: scori now
+  fetches `CHANGELOG.md` (and common variants) from the package's GitHub
+  repository and scans the relevant version sections for breaking-change
+  keywords alongside existing GitHub release notes scanning. Also detects
+  `BREAKING CHANGE:` Conventional Commit footers in both release notes and
+  CHANGELOG content.
+
 ## [0.2.0] - 2026-05-12
 
 ### Added

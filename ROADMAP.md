@@ -59,19 +59,19 @@ Improve the accuracy and depth of the friction score algorithm.
 
 ### Real transitive dependency counts
 
-- [ ] Parse `poetry.lock` to count packages that depend on the package being updated
-- [ ] Parse `uv.lock` for the same
-- [ ] Use the resolved count in the score weight (currently always 0)
+- [x] Parse `uv.lock` to count packages that depend on the package being updated
+- [x] Parse `poetry.lock` for the same
+- [x] Use the resolved count in the score weight (currently always 0)
 
 ### CVEs in the score
 
 - [x] Incorporate OSV CVE count directly into the weighted algorithm (up to +15 pts)
-- [ ] Weight CVSS ≥ 9.0 CVEs more heavily than lower-severity ones
+- [x] Weight CVSS ≥ 9.0 CVEs more heavily than lower-severity ones
 
 ### Improved breaking signal detection
 
-- [ ] Scan `CHANGELOG.md` from the GitHub repo in addition to release notes
-- [ ] Detect `BREAKING CHANGE:` in Conventional Commits commit history
+- [x] Scan `CHANGELOG.md` from the GitHub repo in addition to release notes
+- [x] Detect `BREAKING CHANGE:` in Conventional Commits commit history
 - [ ] Heuristic diff of `.pyi` type stub files between versions as an API-change signal
 
 ### Broader version resolution

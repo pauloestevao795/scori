@@ -65,12 +65,25 @@ def _venv_version(project_root: Path, package: str) -> str | None:
     return None
 
 
-# In-memory cache for OSV results within a single scori run.
-_osv_cache: dict[tuple[str, str], int] = {}
+# In-memory OSV cache: (total_count, weighted_count).
+# weighted_count gives CRITICAL-severity CVEs double weight (see _cvss_weight).
+_osv_cache: dict[tuple[str, str], tuple[int, int]] = {}
 
 
-def _fetch_osv_count(package: str, version: str) -> int:
-    """Return the number of known CVEs for a given package version via OSV API."""
+def _cvss_weight(vuln: dict[str, Any]) -> int:
+    """Return score weight for a single vulnerability: 2 for CRITICAL, 1 otherwise."""
+    db_sev = str((vuln.get("database_specific") or {}).get("severity") or "").upper()
+    if db_sev == "CRITICAL":
+        return 2
+    return 1
+
+
+def _fetch_osv(package: str, version: str) -> tuple[int, int]:
+    """Return (total_cve_count, weighted_cve_count) via the OSV API.
+
+    weighted_count: CRITICAL CVEs count double, so the friction score
+    responds more strongly to high-severity vulnerabilities.
+    """
     key = (package.lower(), version)
     if key in _osv_cache:
         return _osv_cache[key]
@@ -83,11 +96,20 @@ def _fetch_osv_count(package: str, version: str) -> int:
             },
             timeout=10,
         )
-        count = len(r.json().get("vulns") or []) if r.ok else 0
+        vulns: list[dict[str, Any]] = r.json().get("vulns") or [] if r.ok else []
+        total = len(vulns)
+        weighted = sum(_cvss_weight(v) for v in vulns)
     except requests.RequestException:
-        count = 0
-    _osv_cache[key] = count
-    return count
+        total, weighted = 0, 0
+    result = (total, weighted)
+    _osv_cache[key] = result
+    return result
+
+
+def _fetch_osv_count(package: str, version: str) -> int:
+    """Return total CVE count (backward-compatible wrapper around _fetch_osv)."""
+    total, _ = _fetch_osv(package, version)
+    return total
 
 
 _alternatives_cache: dict[str, list[str]] = {}
@@ -224,6 +246,19 @@ def _fetch_github_releases(owner: str, repo: str) -> list[dict[str, Any]]:
     return cast(list[dict[str, Any]], r.json())
 
 
+def _fetch_github_changelog(owner: str, repo: str) -> str:
+    """Fetch raw CHANGELOG.md from the default branch; return '' on any error."""
+    for filename in ("CHANGELOG.md", "CHANGES.md", "HISTORY.md", "CHANGELOG.rst"):
+        url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{filename}"
+        try:
+            r = requests.get(url, headers=_gh_headers(), timeout=10)
+            if r.ok and r.text.strip():
+                return r.text
+        except requests.RequestException:
+            pass
+    return ""
+
+
 def _extract_owner_repo(pypi: dict[str, Any]) -> tuple[str, str] | None:
     urls = (pypi.get("info") or {}).get("project_urls") or {}
     for value in urls.values():
@@ -236,19 +271,28 @@ def _extract_owner_repo(pypi: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def _gather(package: str) -> dict[str, Any]:
-    """Fetch PyPI + GitHub releases, with local cache."""
+    """Fetch PyPI + GitHub releases + CHANGELOG.md, with local cache."""
     cached = _cache_read(package)
     if cached is not None:
         return cached
     pypi = _fetch_pypi(package)
     owner_repo = _extract_owner_repo(pypi)
     releases: list[dict[str, Any]] = []
+    changelog = ""
     if owner_repo is not None:
         try:
             releases = _fetch_github_releases(*owner_repo)
         except requests.RequestException:
             releases = []
-    payload: dict[str, Any] = {"pypi": pypi, "releases": releases}
+        try:
+            changelog = _fetch_github_changelog(*owner_repo)
+        except requests.RequestException:
+            changelog = ""
+    payload: dict[str, Any] = {
+        "pypi": pypi,
+        "releases": releases,
+        "changelog": changelog,
+    }
     _cache_write(package, payload)
     return payload
 
@@ -272,11 +316,16 @@ def _version_jump(current: str, latest: str) -> tuple[VersionJump, int]:
 
 
 def _scan_breaking(
-    releases: list[dict[str, Any]], current: str, latest: str
+    releases: list[dict[str, Any]],
+    current: str,
+    latest: str,
+    changelog: str = "",
 ) -> list[str]:
-    """Search release notes for breaking keywords.
+    """Search release notes and CHANGELOG.md for breaking change signals.
 
-    Scans releases between current (exclusive) and latest (inclusive).
+    Scans releases and CHANGELOG sections between current (exclusive) and
+    latest (inclusive). Also detects BREAKING CHANGE: Conventional Commit
+    footers anywhere in the changelog text for the relevant version range.
     """
     try:
         cv = Version(current)
@@ -284,6 +333,8 @@ def _scan_breaking(
     except InvalidVersion:
         return []
     signals: list[str] = []
+
+    # --- GitHub release notes ---
     for rel in releases:
         tag = (rel.get("tag_name") or "").lstrip("v")
         body = rel.get("body") or ""
@@ -297,6 +348,38 @@ def _scan_breaking(
         for kw in BREAKING_KEYWORDS:
             if kw in body_low:
                 signals.append(f"'{kw}' in {tag} release notes")
+        if "breaking change:" in body_low:
+            signals.append(f"BREAKING CHANGE footer in {tag} release notes")
+
+    # --- CHANGELOG.md ---
+    if changelog:
+        # Extract the portion of the CHANGELOG between current and latest.
+        # Strategy: find section headers that look like version numbers and
+        # collect text for versions in the (current, latest] range.
+        section_re = re.compile(
+            r"^#{1,3}\s+(?:v?(\d+\.\d+[\w.\-]*)|\[v?(\d+\.\d+[\w.\-]*)\])",
+            re.MULTILINE,
+        )
+        sections: list[tuple[Version, int]] = []
+        for m in section_re.finditer(changelog):
+            raw = m.group(1) or m.group(2)
+            try:
+                sections.append((Version(raw), m.start()))
+            except InvalidVersion:
+                continue
+        sections.sort(key=lambda x: x[0], reverse=True)
+
+        for i, (sv, start) in enumerate(sections):
+            if not (cv < sv <= lv):
+                continue
+            end = sections[i + 1][1] if i + 1 < len(sections) else len(changelog)
+            chunk = changelog[start:end].lower()
+            for kw in BREAKING_KEYWORDS:
+                if kw in chunk:
+                    signals.append(f"'{kw}' in CHANGELOG {sv}")
+            if "breaking change:" in chunk:
+                signals.append(f"BREAKING CHANGE footer in CHANGELOG {sv}")
+
     return signals
 
 
@@ -358,20 +441,17 @@ def compute(
     transitive_affected: int = 0,
     project_root: Path | None = None,
 ) -> FrictionResult:
-    """Compute the FrictionResult for a dependency.
-
-    ``transitive_affected`` will be populated by the caller from the
-    uv.lock/poetry.lock parser in v0.3+. Defaults to 0 for now.
-    """
+    """Compute the FrictionResult for a dependency."""
     data = _gather(dep["name"])
     pypi: dict[str, Any] = data["pypi"]
     releases: list[dict[str, Any]] = data["releases"]
+    changelog: str = data.get("changelog") or ""
 
     latest = (pypi.get("info") or {}).get("version") or "0.0.0"
     current = _current_version_from_spec(dep["version_spec"], dep["name"], project_root)
 
     jump, jump_pts = _version_jump(current, latest)
-    signals = _scan_breaking(releases, current, latest)
+    signals = _scan_breaking(releases, current, latest, changelog)
     signal_pts = min(20, 4 * len(signals))
     transitive_pts = min(15, 3 * transitive_affected)
     months = _months_outdated(pypi, current)
@@ -379,12 +459,15 @@ def compute(
     yanked = _is_yanked(pypi, current)
     yanked_pts = 5 if yanked else 0
 
-    cve_current = _fetch_osv_count(dep["name"], current) if current != "0.0.0" else -1
-    cve_latest = _fetch_osv_count(dep["name"], latest)
+    cve_current_total, cve_current_w = (
+        _fetch_osv(dep["name"], current) if current != "0.0.0" else (-1, -1)
+    )
+    cve_latest_total, cve_latest_w = _fetch_osv(dep["name"], latest)
 
-    # CVE points: only when updating would actually fix vulnerabilities
-    fixed_cves = max(0, cve_current - cve_latest) if cve_current > 0 else 0
-    cve_pts = min(15, fixed_cves * 3)
+    # CVE points: use weighted counts so CRITICAL CVEs push the score harder.
+    # Only count CVEs that updating would actually fix.
+    fixed_weighted = max(0, cve_current_w - cve_latest_w) if cve_current_w > 0 else 0
+    cve_pts = min(15, fixed_weighted * 3)
 
     score = min(
         100, jump_pts + signal_pts + transitive_pts + months_pts + yanked_pts + cve_pts
@@ -392,7 +475,7 @@ def compute(
     label, recommendation = _label(score)
 
     # Suggest alternatives only when CVEs are present and updating won't fix them
-    unresolved_cves = cve_current > 0 and cve_latest >= cve_current
+    unresolved_cves = cve_current_total > 0 and cve_latest_total >= cve_current_total
     alternatives = (
         _fetch_alternatives_online(dep["name"], data["pypi"]) if unresolved_cves else []
     )
@@ -409,7 +492,7 @@ def compute(
         months_outdated=months,
         yanked=yanked,
         recommendation=recommendation,
-        cve_current=cve_current,
-        cve_latest=cve_latest,
+        cve_current=cve_current_total,
+        cve_latest=cve_latest_total,
         alternatives=alternatives,
     )

@@ -7,10 +7,13 @@ from scori._types import Dependency
 from scori.friction import (
     _alternatives_cache,
     _current_version_from_spec,
+    _cvss_weight,
     _fetch_alternatives_online,
+    _fetch_osv,
     _fetch_osv_count,
     _label,
     _osv_cache,
+    _scan_breaking,
     _venv_version,
     _version_jump,
 )
@@ -108,8 +111,68 @@ def test_fetch_osv_count_api_error() -> None:
 
 def test_fetch_osv_count_uses_cache() -> None:
     _osv_cache.clear()
-    _osv_cache[("requests", "2.32.0")] = 3
+    _osv_cache[("requests", "2.32.0")] = (3, 3)
     assert _fetch_osv_count("requests", "2.32.0") == 3
+
+
+@rsps.activate
+def test_fetch_osv_critical_cvss_weight() -> None:
+    _osv_cache.clear()
+    rsps.add(
+        rsps.POST,
+        "https://api.osv.dev/v1/query",
+        json={
+            "vulns": [
+                {"id": "GHSA-1", "database_specific": {"severity": "CRITICAL"}},
+                {"id": "GHSA-2", "database_specific": {"severity": "HIGH"}},
+            ]
+        },
+        status=200,
+    )
+    total, weighted = _fetch_osv("python-jose", "3.3.0")
+    assert total == 2
+    assert weighted == 3  # 2 (CRITICAL) + 1 (HIGH)
+
+
+def test_cvss_weight_critical() -> None:
+    assert _cvss_weight({"database_specific": {"severity": "CRITICAL"}}) == 2
+
+
+def test_cvss_weight_high() -> None:
+    assert _cvss_weight({"database_specific": {"severity": "HIGH"}}) == 1
+
+
+def test_cvss_weight_no_severity() -> None:
+    assert _cvss_weight({}) == 1
+
+
+def test_scan_breaking_detects_changelog_keywords() -> None:
+    changelog = """\
+## [2.0.0]
+This release has a breaking change to the API.
+Removed the old endpoint.
+
+## [1.0.0]
+Initial release.
+"""
+    signals = _scan_breaking([], "1.0.0", "2.0.0", changelog)
+    assert any("CHANGELOG" in s or "changelog" in s.lower() for s in signals)
+
+
+def test_scan_breaking_ignores_out_of_range_changelog() -> None:
+    changelog = """\
+## [2.0.0]
+Nothing special here.
+
+## [1.5.0]
+breaking change here
+
+## [1.0.0]
+Initial release.
+"""
+    # current=1.5.0, latest=2.0.0 — the breaking in 1.5.0 is NOT in range
+    signals = _scan_breaking([], "1.5.0", "2.0.0", changelog)
+    assert all("1.5.0" not in s for s in signals)
 
 
 def test_dependency_typeddict() -> None:

@@ -89,16 +89,16 @@ each candidate against the OSV database before suggesting it. No hardcoded list
 
 ## How it works
 
-The friction score is a weighted sum of five components (max 100):
+The friction score is a weighted sum of six components (max 100):
 
-| Component                           | Max weight | Logic                               |
-|-------------------------------------|------------|-------------------------------------|
-| Semantic version jump               | 50         | patch=5, minor=25, major=50         |
-| Breaking signals in changelog       | 20         | +4 per keyword found (max 20)       |
-| Affected transitive dependencies    | 15         | +3 per transitive dep (max 15)      |
-| CVEs fixed by updating              | 15         | +3 per fixed CVE (max 15)           |
-| Months without updating in project  | 10         | +1 per month (max 10)               |
-| Current version yanked              | 5          | +5 if `yanked: true` in PyPI API    |
+| Component                           | Max weight | Logic                                              |
+|-------------------------------------|------------|----------------------------------------------------|
+| Semantic version jump               | 50         | patch=5, minor=25, major=50                        |
+| Breaking signals in changelog       | 20         | +4 per keyword found in release notes or CHANGELOG |
+| Affected transitive dependencies    | 15         | +3 per reverse dep (from `uv.lock`/`poetry.lock`)  |
+| CVEs fixed by updating              | 15         | +3 per fixed CVE (CRITICAL CVEs count double)      |
+| Months without updating in project  | 10         | +1 per month (max 10)                              |
+| Current version yanked              | 5          | +5 if `yanked: true` in PyPI API                   |
 
 Labels:
 
@@ -109,10 +109,13 @@ Labels:
 
 CVE data is fetched from the [OSV database](https://osv.dev) (free, no auth required).
 CVEs that are **fixed by updating** contribute up to +15 points to the
-friction score — a dependency where updating resolves known vulnerabilities
-will score higher, pushing it toward the top of your update queue. CVEs that
-remain present in the latest version do not affect the score (updating won't
-help with those).
+friction score. CRITICAL-severity CVEs (CVSS ≥ 9.0, as reported by the GitHub
+Advisory Database) count double, so the most dangerous vulnerabilities push
+the package higher in your update queue. CVEs that remain in the latest version
+do not affect the score (updating won't help with those).
+
+Transitive dependency counts are read directly from `uv.lock` or `poetry.lock`
+when present — no more always-zero placeholder.
 
 ### Data sources
 
