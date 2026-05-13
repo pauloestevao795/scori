@@ -13,9 +13,9 @@ _HISTORY_DIR = Path.home() / ".local" / "share" / "scori" / "history"
 
 
 def _project_key(project_root: Path) -> str:
-    """Return a 12-character SHA-1 hex digest of the resolved project path."""
+    """Return a 12-character SHA-256 hex digest of the resolved project path."""
     resolved = str(project_root.resolve())
-    return hashlib.sha1(resolved.encode()).hexdigest()[:12]
+    return hashlib.sha256(resolved.encode()).hexdigest()[:12]
 
 
 def _history_file(project_root: Path) -> Path:

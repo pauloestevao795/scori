@@ -531,13 +531,32 @@ def _update_line(line: str, package: str, new_version: str) -> str | None:
     return f"{prefix}=={new_version}{suffix}"
 
 
+# Maps user-supplied source_file names to hardcoded safe literals so that
+# taint from remote data never reaches path construction.
+_SAFE_MANIFEST_NAMES: dict[str, str] = {
+    "requirements.txt": "requirements.txt",
+    "requirements-dev.txt": "requirements-dev.txt",
+    "requirements-test.txt": "requirements-test.txt",
+    "pyproject.toml": "pyproject.toml",
+    "setup.cfg": "setup.cfg",
+}
+
+
+def _safe_manifest_path(project_root: Path, source_file: str) -> Path | None:
+    """Return the manifest path using a hardcoded filename, or None if not allowed."""
+    safe_name = _SAFE_MANIFEST_NAMES.get(Path(source_file).name)
+    if safe_name is None:
+        return None
+    return project_root.resolve() / safe_name
+
+
 def _backup_manifests(project_root: Path, source_files: set[str]) -> Path:
     backup_dir = project_root / _BACKUP_DIR
     backup_dir.mkdir(exist_ok=True)
     for sf in source_files:
-        src = project_root / sf
-        if src.exists():
-            shutil.copy2(src, backup_dir / sf)
+        src = _safe_manifest_path(project_root, sf)
+        if src is not None and src.exists():
+            shutil.copy2(src, backup_dir / src.name)
     return backup_dir
 
 
@@ -623,7 +642,9 @@ def _cmd_update(args: argparse.Namespace) -> int:
         sf = dep_map.get(r["name"].lower())
         if not sf:
             continue
-        manifest = project_root / sf
+        manifest = _safe_manifest_path(project_root, sf)
+        if manifest is None or not manifest.exists():
+            continue
         lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
         for i, line in enumerate(lines):
             new_line = _update_line(line, r["name"], r["latest_version"])
