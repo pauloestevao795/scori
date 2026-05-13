@@ -24,6 +24,7 @@ uv add scori
 scori friction --path .
 scori friction --path . --format json > report.json
 scori friction --path . --format html        # writes scori-report.html
+scori friction --path . --format markdown    # markdown table (GitHub / PR comments)
 scori friction --path . --ci                 # exit 1 if any score > 75
 scori friction --path . --ci --threshold 50  # stricter gate
 
@@ -123,7 +124,8 @@ when present — no more always-zero placeholder.
 | --- | --- |
 | `https://pypi.org/pypi/{pkg}/json` | Latest version, release dates, yanked status |
 | `https://api.github.com/repos/{owner}/{repo}/releases` | Release notes for breaking signal detection |
-| `https://api.osv.dev/v1/query` | Known CVEs per version |
+| `https://raw.githubusercontent.com/…/CHANGELOG.md` | CHANGELOG for additional breaking signal scanning |
+| `https://api.osv.dev/v1/query` | Known CVEs per version with severity |
 
 Set `GITHUB_TOKEN` in your environment to raise the GitHub API rate limit from 60/h to 5000/h. PyPI and GitHub release data is cached in `~/.cache/scori/` for 1 hour. OSV results are cached in memory for the duration of a single run.
 
@@ -131,11 +133,62 @@ Set `GITHUB_TOKEN` in your environment to raise the GitHub API rate limit from 6
 
 For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directly. For unpinned dependencies (`uvicorn` with no version), scori looks up the installed version in the project's local venv (`.venv/`, `venv/`, or `env/`) before falling back to `0.0.0`.
 
+## GitHub Actions
+
+Add scori to any workflow in one step:
+
+```yaml
+- uses: pauloestevao795/scori@v0.4.0
+  with:
+    threshold: '75'       # fail if any dep score exceeds this (default: 75)
+    comment-pr: 'true'    # post friction table as a PR comment
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Full example — gate PRs that touch dependency files:
+
+```yaml
+name: scori friction check
+on:
+  pull_request:
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'setup.cfg'
+
+jobs:
+  friction:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pauloestevao795/scori@v0.4.0
+        with:
+          threshold: '75'
+          comment-pr: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+## Pre-commit hook
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pauloestevao795/scori
+    rev: v0.4.0
+    hooks:
+      - id: scori-friction
+        args: [--threshold, '75']  # optional: override default threshold
+```
+
+The hook runs `scori friction --ci` and blocks the commit if any dependency
+exceeds the threshold. It only fires when `requirements*.txt`, `pyproject.toml`,
+or `setup.cfg` are staged.
+
 ## Roadmap
 
-- **v0.3** — parse `poetry.lock` / `uv.lock` for real transitive dep counts
-- **v0.3** — weight CVSS ≥ 9.0 CVEs more heavily in the score
-- **v0.4** — `scori-action` for GitHub Actions, pre-commit hook
+- **v0.5** — score history, `.scori.toml` risk profiles, LLM changelog summaries
 
 ## Contributing
 

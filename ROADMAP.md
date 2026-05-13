@@ -88,14 +88,14 @@ Bring scori into the workflows and tools developers already use.
 
 ### GitHub Actions
 
-- [ ] Official `scori-action` published to the GitHub Marketplace
-- [ ] Automatic PR comment with a friction table for any changed dependencies
+- [x] Composite action (`action.yml`) — install scori + run friction check in one step
+- [x] Automatic PR comment with the markdown friction table (`comment-pr: true`)
 - [ ] Dynamic badge for `README.md` showing the project's average friction score
 
 ### Pre-commit hook
 
-- [ ] Official hook for `.pre-commit-config.yaml`
-- [ ] Configurable threshold — block commit if any dep exceeds it
+- [x] Official hook for `.pre-commit-config.yaml` (`.pre-commit-hooks.yaml`)
+- [x] Configurable threshold — block commit if any dep exceeds it
 
 ### VSCode Extension *(stretch goal)*
 

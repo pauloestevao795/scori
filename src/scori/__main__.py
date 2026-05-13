@@ -112,6 +112,51 @@ def _format_table(results: list[FrictionResult]) -> None:
     console.print(table)
 
 
+def _fmt_cves_plain(current: int, latest: int) -> str:
+    if current == -1:
+        return f"? → {latest}" if latest > 0 else "?"
+    if current == 0 and latest == 0:
+        return "—"
+    if current > 0 and latest == 0:
+        return f"{current} → 0 ✓"
+    if current > 0 and latest < current:
+        return f"{current} → {latest}"
+    if current > 0:
+        return str(current)
+    return f"→ {latest}"
+
+
+def _format_markdown(results: list[FrictionResult], threshold: int = 75) -> str:
+    label_emoji = {"Low": "🟢", "Medium": "🟡", "High": "🟠", "Critical": "🔴"}
+    over = [r for r in results if r["score"] > threshold]
+    header = "## scori — dependency friction scores\n\n"
+    if over:
+        names = ", ".join(f"`{r['name']}`" for r in over)
+        header += (
+            f"> ⚠️ **{len(over)} {'dependency' if len(over) == 1 else 'dependencies'} "
+            f"exceeded threshold {threshold}:** {names}\n\n"
+        )
+    rows = [
+        "| Package | Current | Latest | Jump | Score | Label | CVEs |",
+        "|---------|---------|--------|------|------:|-------|:----:|",
+    ]
+    for r in results:
+        emoji = label_emoji.get(r["label"], "⚪")
+        cve_cell = _fmt_cves_plain(r["cve_current"], r["cve_latest"])
+        rows.append(
+            f"| {r['name']} | {r['current_version']} | {r['latest_version']} "
+            f"| {r['version_jump']} | {r['score']} "
+            f"| {emoji} {r['label']} | {cve_cell} |"
+        )
+    alts = [r for r in results if r["alternatives"]]
+    footer = ""
+    if alts:
+        footer = "\n\n### ⚠️ Unresolved CVEs — consider alternatives\n\n"
+        for r in alts:
+            footer += f"- **{r['name']}** → {', '.join(r['alternatives'])}\n"
+    return header + "\n".join(rows) + footer
+
+
 def _format_html(results: list[FrictionResult]) -> str:
     rows = "\n".join(
         f"<tr><td>{r['name']}</td><td>{r['current_version']}</td>"
@@ -141,6 +186,8 @@ def _cmd_friction(args: argparse.Namespace) -> int:
         out = Path(args.path) / "scori-report.html"
         out.write_text(_format_html(results), encoding="utf-8")
         console.print(f"[green]HTML report written to {out}[/]")
+    elif args.format == "markdown":
+        print(_format_markdown(results, threshold=args.threshold))
     else:
         _format_table(results)
         _print_alternatives(results)
@@ -556,7 +603,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_fric = sub.add_parser("friction", help="Compute friction score per dependency")
     p_fric.add_argument("--path", default=".", help="Path to the target project")
-    p_fric.add_argument("--format", choices=["json", "table", "html"], default="table")
+    p_fric.add_argument(
+        "--format",
+        choices=["json", "table", "html", "markdown"],
+        default="table",
+    )
     p_fric.add_argument(
         "--ci",
         action="store_true",

@@ -1,0 +1,10 @@
+- id: scori-friction
+  name: scori — dependency friction check
+  description: >
+    Compute friction scores for all dependencies and fail if any score exceeds
+    the configured threshold (default: 75). Add --threshold N to args to adjust.
+  entry: scori friction --ci
+  language: python
+  additional_dependencies: ["scori"]
+  pass_filenames: false
+  files: '(^|.*/)requirements[^/]*\.txt$|(^|.*/)pyproject\.toml$|(^|.*/)setup\.cfg$'

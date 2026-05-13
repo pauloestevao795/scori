@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `scori friction --format markdown`: outputs a GitHub-flavoured markdown table
+  with emoji traffic-light indicators, a warning block for dependencies that
+  exceeded the threshold, and an alternatives section — designed for automated
+  PR comments.
+- GitHub Actions composite action (`action.yml`): single-step integration that
+  installs scori, runs the friction check, gates on a configurable threshold,
+  and optionally posts the markdown table as a pull request comment
+  (uses `--edit-last` to update rather than duplicate the comment on re-runs).
+  Inputs: `path`, `threshold` (default 75), `github-token`, `comment-pr`,
+  `format`. Output: `result` (JSON array of `FrictionResult` objects).
+- Pre-commit hook (`.pre-commit-hooks.yaml`): add scori to
+  `.pre-commit-config.yaml` with `repo: https://github.com/pauloestevao795/scori`.
+  The hook runs `scori friction --ci` and blocks commits when any dependency
+  exceeds the threshold. Only fires when manifest files change
+  (`requirements*.txt`, `pyproject.toml`, `setup.cfg`).
+
 ## [0.3.0] - 2026-05-12
 
 ### Added
