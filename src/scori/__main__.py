@@ -2,12 +2,13 @@
 
 Available commands:
     scori scan --path .
-    scori friction --path . [--format json|table|html] [--ci [--threshold N]]
+    scori friction --path . [--format json|table|html|markdown|cyclonedx]
     scori monitor --path . [--watch [--interval N]]
     scori update --path . [--dry-run | --apply [--max-friction LABEL] | --rollback]
     scori report --path . [--format html|json] [--output FILE] [--ci [--threshold N]]
     scori history --path . [--limit N]
-    scori order --path .
+    scori order --path . [--stub-diff]
+    scori fix --path . [--apply] [--max-friction LABEL]
 """
 
 from __future__ import annotations
@@ -211,6 +212,10 @@ def _cmd_friction(args: argparse.Namespace) -> int:
 
     if args.format == "json":
         print(jsonlib.dumps(results, indent=2))
+    elif args.format == "cyclonedx":
+        from .sbom import to_cyclonedx
+
+        print(jsonlib.dumps(to_cyclonedx(results), indent=2))
     elif args.format == "html":
         out = Path(args.path) / "scori-report.html"
         out.write_text(_format_html(results), encoding="utf-8")
@@ -796,6 +801,99 @@ def _cmd_order(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_fix(args: argparse.Namespace) -> int:
+    from .fix import create_pr, current_branch
+
+    cfg = ScoriConfig.load(Path(args.path))
+    project_root = Path(args.path).resolve()
+
+    deps = scan(args.path)
+    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
+    results = _compute_all(deps, project_root)
+
+    max_score = (
+        _LABEL_MAX_SCORE.get(args.max_friction.lower(), 100)
+        if args.max_friction
+        else 100
+    )
+    dep_map = {d["name"].lower(): d["source_file"] for d in deps}
+
+    result_map = {r["name"].lower(): r for r in results}
+    updatable = [
+        (
+            r["name"],
+            r["current_version"],
+            r["latest_version"],
+            dep_map.get(r["name"].lower(), ""),
+        )
+        for r in results
+        if r["current_version"] != r["latest_version"]
+        and r["current_version"] != "0.0.0"
+        and r["score"] <= max_score
+    ]
+
+    # Sort lowest friction first (safest updates in the PR)
+    def _fix_sort_key(t: tuple[str, str, str, str]) -> int:
+        e = result_map.get(t[0].lower())
+        return e["score"] if e else 100
+
+    updatable.sort(key=_fix_sort_key)
+
+    if not updatable:
+        console.print("[green]No updates to apply.[/]")
+        return 0
+
+    color_map = {
+        "Low": "green",
+        "Medium": "yellow",
+        "High": "orange1",
+        "Critical": "red",
+    }
+    table = Table(
+        title="scori fix — proposed PR" + (" [dry run]" if not args.apply else "")
+    )
+    table.add_column("Package")
+    table.add_column("Current → Latest")
+    table.add_column("Score")
+    table.add_column("File")
+    for name, cur, lat, sf in updatable:
+        r_entry = result_map.get(name.lower())
+        label = r_entry["label"] if r_entry else ""
+        color = color_map.get(str(label), "white")
+        score: int | str = r_entry["score"] if r_entry else "?"
+        table.add_row(
+            name,
+            f"{cur} → [bold]{lat}[/]",
+            f"[{color}]{score} {label}[/]" if label else str(score),
+            sf or "?",
+        )
+    console.print(table)
+
+    dry_run = not args.apply
+    if dry_run:
+        console.print(
+            "\n[dim]Dry run — no PR created. Use --apply to open a GitHub PR.[/]"
+        )
+        return 0
+
+    try:
+        base = current_branch(project_root)
+        outcome = create_pr(
+            project_root=project_root,
+            updates=updatable,
+            results=results,
+            base_branch=base,
+            dry_run=False,
+        )
+        pr_url = outcome.get("pr_url") or ""
+        console.print(f"\n[green]PR created: {pr_url}[/]")
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Error: {e}[/]")
+        return 1
+
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scori")
     parser.add_argument("--version", action="version", version=f"scori {__version__}")
@@ -809,7 +907,7 @@ def main(argv: list[str] | None = None) -> int:
     p_fric.add_argument("--path", default=".", help="Path to the target project")
     p_fric.add_argument(
         "--format",
-        choices=["json", "table", "html", "markdown"],
+        choices=["json", "table", "html", "markdown", "cyclonedx"],
         default="table",
     )
     p_fric.add_argument(
@@ -921,6 +1019,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Number of historical snapshots to show (default: 10)",
     )
     p_hist.set_defaults(func=_cmd_history)
+
+    p_fix = sub.add_parser(
+        "fix", help="Open a GitHub PR with recommended dependency updates"
+    )
+    p_fix.add_argument("--path", default=".", help="Path to the target project")
+    p_fix.add_argument(
+        "--apply",
+        action="store_true",
+        help="Create the PR (requires GITHUB_TOKEN). Default: dry run only.",
+    )
+    p_fix.add_argument(
+        "--max-friction",
+        metavar="LABEL",
+        choices=["low", "medium", "high", "critical"],
+        help="Only include deps at or below this label in the PR",
+    )
+    p_fix.set_defaults(func=_cmd_fix)
 
     p_ord = sub.add_parser(
         "order", help="Show a ranked update plan sorted by risk and CVE impact"
