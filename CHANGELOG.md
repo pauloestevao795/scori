@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [0.7.1] - 2026-05-13
+
+### Fixed
+
+- Path traversal: `source_file` values from dependency results are now validated
+  against a hardcoded allowlist (`_SAFE_MANIFEST_NAMES`) before being used in
+  `shutil.copy2` or path concatenation — eliminates Snyk MEDIUM findings
+- SHA-256 docstring correction in `history.py` (was incorrectly labelled SHA-1)
+- Recursive manifest discovery: `scan()` now traverses subdirectories, skipping
+  `.venv/`, `site-packages/`, `build/` and other non-source dirs
+- Badge workflow commits now attributed to `pauloestevao` instead of
+  `github-actions[bot]`
+
+### Added
+
+- `SECURITY.md`: vulnerability reporting policy and data-flow disclosure
+- `pip-audit` step in CI: blocks on any CVE in scori's own dependencies
+
 ## [0.7.0] - 2026-05-13
 
 ### Added
