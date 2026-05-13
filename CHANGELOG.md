@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [Unreleased] - v0.5.0
+
+### Added
+
+- Per-project `.scori.toml` configuration with three built-in risk profiles:
+  `conservative` (threshold 50), `balanced` (threshold 75, default), and
+  `aggressive` (threshold 90). An explicit `threshold` key in `[scori]`
+  overrides the profile default. Packages listed under `[ignore] packages`
+  are skipped entirely.
+- Score history: every `scori friction` run appends a JSONL snapshot to
+  `~/.local/share/scori/history/<project-sha1>.jsonl`. Use
+  `scori history --path .` to view the last 10 snapshots with trend
+  indicators (↑ rising, ↓ falling, — stable, ↕ fluctuating) per package.
+- `scori order` command: ranks dependencies by recommended update order,
+  balancing friction score with OSV vulnerability data to surface the highest
+  value / lowest risk updates first.
+- LLM changelog summary (`--summarise` flag on `scori friction`): calls Ollama
+  (localhost:11434) first, then falls back to Claude (ANTHROPIC_API_KEY) and
+  OpenAI (OPENAI_API_KEY). Returns a concise plain-English summary of what
+  changes in a given update. Off by default — never required to use scori.
+- Vuln column replaces the CVEs column in all output formats, now including
+  CWE weakness IDs (e.g. `CWE-79`) collected from the OSV response and mapped
+  to OWASP Top 10 2021 categories (e.g. `A03 Injection`).
+
 ## [0.4.0] - 2026-05-12
 
 ### Added

@@ -27,6 +27,7 @@ scori friction --path . --format html        # writes scori-report.html
 scori friction --path . --format markdown    # markdown table (GitHub / PR comments)
 scori friction --path . --ci                 # exit 1 if any score > 75
 scori friction --path . --ci --threshold 50  # stricter gate
+scori friction --path . --summarise          # LLM plain-language summary per update
 
 # Show only dependencies with updates available, sorted by friction
 scori monitor --path .
@@ -45,6 +46,13 @@ scori report --path . --format json          # prints JSON to stdout
 scori report --path . --output out.html      # custom output path
 scori report --path . --ci --threshold 60    # exit 1 if any score > 60
 
+# Score history and trends
+scori history --path .                       # last 10 snapshots with ↑↓ trend per dep
+scori history --path . --limit 20            # last 20 snapshots
+
+# Recommended update order
+scori order --path .                         # rank deps by update priority
+
 # List all detected dependencies
 scori scan --path .
 ```
@@ -54,7 +62,7 @@ Example output (`scori friction --format table`, with color indicators):
 ```text
                           scori — friction scores
 ┌───────────┬─────────┬─────────┬───────┬───────┬──────────┬─────────┐
-│ Package   │ Current │ Latest  │ Jump  │ Score │ Label    │  CVEs   │
+│ Package   │ Current │ Latest  │ Jump  │ Score │ Label    │  Vuln   │
 ├───────────┼─────────┼─────────┼───────┼───────┼──────────┼─────────┤
 │ django    │ 3.2.0   │ 5.1.0   │ major │  78   │ Critical │ 3 → 0 ✓ │
 │ nltk      │ 3.8.1   │ 3.9.4   │ minor │  35   │ Medium   │ 9 → 0 ✓ │
@@ -62,12 +70,15 @@ Example output (`scori friction --format table`, with color indicators):
 └───────────┴─────────┴─────────┴───────┴───────┴──────────┴─────────┘
 ```
 
-The **CVEs** column shows known vulnerabilities in your current version and
-whether they are fixed in the latest release:
+The **Vuln** column shows known vulnerabilities (CVE/CWE) in your current version
+and whether they are fixed in the latest release:
 
-- `9 → 0 ✓` — 9 CVEs in current, all fixed in latest (prioritize this update)
-- `3` — 3 CVEs, still present in latest (update won't help with security)
+- `9 → 0 ✓` — 9 vulns in current, all fixed in latest (prioritize this update)
+- `3` — 3 vulns, still present in latest (update won't help with security)
 - `—` — no known vulnerabilities in either version
+
+When CWE IDs are present in OSV data, scori maps them to OWASP Top 10 2021
+categories (e.g. `CWE-79` → `A03 Injection`).
 
 `scori monitor` shows only the packages that have a newer release available,
 sorted by friction score (highest first), and marks with ★ any package where
@@ -186,9 +197,22 @@ The hook runs `scori friction --ci` and blocks the commit if any dependency
 exceeds the threshold. It only fires when `requirements*.txt`, `pyproject.toml`,
 or `setup.cfg` are staged.
 
+## Configuration
+
+Create `.scori.toml` at the project root to customize scori's behaviour:
+
+```toml
+[scori]
+profile = "conservative"  # conservative (50) | balanced (75) | aggressive (90)
+threshold = 60            # explicit threshold overrides profile default
+
+[ignore]
+packages = ["boto3", "some-internal-lib"]  # skip these deps entirely
+```
+
 ## Roadmap
 
-- **v0.5** — score history, `.scori.toml` risk profiles, LLM changelog summaries
+- **v0.6** — conda/pyenv version resolution, `.pyi` stub diff for API-change detection, dynamic README badge
 
 ## Contributing
 

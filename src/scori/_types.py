@@ -24,6 +24,7 @@ class FrictionResult(TypedDict):
     months_outdated: float
     yanked: bool
     recommendation: str
-    cve_current: int  # CVEs in current version (-1 = version unresolved)
-    cve_latest: int  # CVEs in latest version
-    alternatives: list[str]  # suggested replacements when CVEs have no fix
+    cve_current: int  # vuln count in current version (-1 = version unresolved)
+    cve_latest: int  # vuln count in latest version
+    cwe_ids: list[str]  # CWE weakness IDs found in current version (e.g. ["CWE-79"])
+    alternatives: list[str]  # suggested replacements when vulns have no fix

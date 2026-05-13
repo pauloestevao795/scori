@@ -65,9 +65,33 @@ def _venv_version(project_root: Path, package: str) -> str | None:
     return None
 
 
-# In-memory OSV cache: (total_count, weighted_count).
-# weighted_count gives CRITICAL-severity CVEs double weight (see _cvss_weight).
-_osv_cache: dict[tuple[str, str], tuple[int, int]] = {}
+# In-memory OSV cache: (total_count, weighted_count, cwe_ids).
+# weighted_count gives CRITICAL-severity vulnerabilities double weight.
+_osv_cache: dict[tuple[str, str], tuple[int, int, list[str]]] = {}
+
+# Mapping of CWE ID → OWASP Top 10 2021 category code.
+_CWE_TO_OWASP: dict[str, str] = {
+    # A01 Broken Access Control
+    **dict.fromkeys(["CWE-22", "CWE-284", "CWE-285", "CWE-639", "CWE-863"], "A01"),
+    # A02 Cryptographic Failures
+    **dict.fromkeys(["CWE-310", "CWE-319", "CWE-326", "CWE-327", "CWE-330"], "A02"),
+    # A03 Injection
+    **dict.fromkeys(
+        ["CWE-20", "CWE-74", "CWE-77", "CWE-78", "CWE-79", "CWE-89"], "A03"
+    ),  # noqa: E501
+    # A04 Insecure Design
+    **dict.fromkeys(["CWE-73", "CWE-183", "CWE-209", "CWE-434", "CWE-94"], "A04"),
+    # A05 Security Misconfiguration
+    **dict.fromkeys(["CWE-16", "CWE-116", "CWE-601", "CWE-611"], "A05"),
+    # A07 Authentication Failures
+    **dict.fromkeys(["CWE-287", "CWE-295", "CWE-306", "CWE-521", "CWE-759"], "A07"),
+    # A08 Software and Data Integrity Failures
+    **dict.fromkeys(["CWE-494", "CWE-502", "CWE-829"], "A08"),
+    # A09 Logging and Monitoring Failures
+    **dict.fromkeys(["CWE-117", "CWE-223", "CWE-532", "CWE-778"], "A09"),
+    # A10 Server-Side Request Forgery
+    **dict.fromkeys(["CWE-918"], "A10"),
+}
 
 
 def _cvss_weight(vuln: dict[str, Any]) -> int:
@@ -78,11 +102,25 @@ def _cvss_weight(vuln: dict[str, Any]) -> int:
     return 1
 
 
-def _fetch_osv(package: str, version: str) -> tuple[int, int]:
-    """Return (total_cve_count, weighted_cve_count) via the OSV API.
+def _vuln_cwe_ids(vulns: list[dict[str, Any]]) -> list[str]:
+    """Collect unique CWE IDs across all returned vulnerabilities."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for v in vulns:
+        for cwe in (v.get("database_specific") or {}).get("cwe_ids") or []:
+            cwe_str = str(cwe)
+            if cwe_str not in seen:
+                seen.add(cwe_str)
+                result.append(cwe_str)
+    return result
 
-    weighted_count: CRITICAL CVEs count double, so the friction score
-    responds more strongly to high-severity vulnerabilities.
+
+def _fetch_osv(package: str, version: str) -> tuple[int, int, list[str]]:
+    """Return (total_count, weighted_count, cwe_ids) via the OSV API.
+
+    weighted_count: CRITICAL-severity vulnerabilities count double so the
+    friction score responds more strongly to high-severity findings.
+    cwe_ids: unique CWE weakness identifiers across all returned vulns.
     """
     key = (package.lower(), version)
     if key in _osv_cache:
@@ -99,16 +137,17 @@ def _fetch_osv(package: str, version: str) -> tuple[int, int]:
         vulns: list[dict[str, Any]] = r.json().get("vulns") or [] if r.ok else []
         total = len(vulns)
         weighted = sum(_cvss_weight(v) for v in vulns)
+        cwe_ids = _vuln_cwe_ids(vulns)
     except requests.RequestException:
-        total, weighted = 0, 0
-    result = (total, weighted)
+        total, weighted, cwe_ids = 0, 0, []
+    result = (total, weighted, cwe_ids)
     _osv_cache[key] = result
     return result
 
 
 def _fetch_osv_count(package: str, version: str) -> int:
-    """Return total CVE count (backward-compatible wrapper around _fetch_osv)."""
-    total, _ = _fetch_osv(package, version)
+    """Return total vulnerability count (backward-compatible wrapper)."""
+    total, _, _ = _fetch_osv(package, version)
     return total
 
 
@@ -459,13 +498,19 @@ def compute(
     yanked = _is_yanked(pypi, current)
     yanked_pts = 5 if yanked else 0
 
-    cve_current_total, cve_current_w = (
-        _fetch_osv(dep["name"], current) if current != "0.0.0" else (-1, -1)
-    )
-    cve_latest_total, cve_latest_w = _fetch_osv(dep["name"], latest)
+    if current != "0.0.0":
+        cve_current_total, cve_current_w, cwe_ids_current = _fetch_osv(
+            dep["name"], current
+        )
+    else:
+        cve_current_total, cve_current_w, cwe_ids_current = -1, -1, []
+    cve_latest_total, cve_latest_w, cwe_ids_latest = _fetch_osv(dep["name"], latest)
 
-    # CVE points: use weighted counts so CRITICAL CVEs push the score harder.
-    # Only count CVEs that updating would actually fix.
+    # Use the current version's CWEs (what the project is exposed to right now)
+    cwe_ids = cwe_ids_current if cwe_ids_current else cwe_ids_latest
+
+    # Vuln points: use weighted counts so CRITICAL vulns push the score harder.
+    # Only count vulnerabilities that updating would actually fix.
     fixed_weighted = max(0, cve_current_w - cve_latest_w) if cve_current_w > 0 else 0
     cve_pts = min(15, fixed_weighted * 3)
 
@@ -494,5 +539,6 @@ def compute(
         recommendation=recommendation,
         cve_current=cve_current_total,
         cve_latest=cve_latest_total,
+        cwe_ids=cwe_ids,
         alternatives=alternatives,
     )

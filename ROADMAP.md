@@ -104,30 +104,37 @@ Bring scori into the workflows and tools developers already use.
 
 ---
 
-## v0.5 — Intelligence layer
+## v0.5 — Intelligence layer ✅
 
 Higher-level features that turn scori from a scoring tool into a maintenance advisor.
 
 ### Score history
 
-- [ ] Track friction scores over time per project in local storage
-- [ ] Trend chart: surface dependencies that are becoming riskier over successive runs
+- [x] Track friction scores over time per project in local storage (JSONL at `~/.local/share/scori/history/`)
+- [x] Trend indicators per package (↑ ↓ — ↕) via `scori history --path .`
 
 ### Risk profiles
 
-- [ ] Per-project `.scori.toml` configuration for custom thresholds and weights
-- [ ] Built-in profiles: `conservative`, `balanced`, `aggressive`
+- [x] Per-project `.scori.toml` configuration for custom thresholds and weights
+- [x] Built-in profiles: `conservative` (50), `balanced` (75), `aggressive` (90)
+- [x] `[ignore] packages` list to skip specific dependencies entirely
 
 ### Suggested update order
 
-- [ ] Rank dependencies by update order to minimise total migration risk
+- [x] `scori order` command: ranks deps by update priority (friction + vuln data)
 - [ ] Detect conflicts between simultaneous updates (e.g. shared transitive dep with incompatible constraints)
 
 ### LLM-assisted changelog summary *(opt-in)*
 
-- [ ] Plain-language summary of what changes in a given update
-- [ ] Supports local inference via Ollama or `OPENAI_API_KEY` — never required to use scori
-- [ ] Off by default; enabled explicitly with `--summarise`
+- [x] Plain-language summary of what changes in a given update (`--summarise`)
+- [x] Supports local inference via Ollama, Claude (ANTHROPIC_API_KEY), or OpenAI (OPENAI_API_KEY)
+- [x] Off by default; enabled explicitly with `--summarise`
+
+### Vuln column (CWE / OWASP)
+
+- [x] Renamed CVEs column to Vuln across all output formats
+- [x] Collect CWE IDs from OSV `database_specific.cwe_ids` field
+- [x] Map CWE IDs to OWASP Top 10 2021 categories via `_CWE_TO_OWASP`
 
 ---
 

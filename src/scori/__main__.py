@@ -6,6 +6,8 @@ Available commands:
     scori monitor --path . [--watch [--interval N]]
     scori update --path . [--dry-run | --apply [--max-friction LABEL] | --rollback]
     scori report --path . [--format html|json] [--output FILE] [--ci [--threshold N]]
+    scori history --path . [--limit N]
+    scori order --path .
 """
 
 from __future__ import annotations
@@ -24,9 +26,12 @@ from rich.table import Table
 
 from . import __version__
 from ._types import Dependency, FrictionResult
+from .config import ScoriConfig
 from .friction import compute
+from .history import compute_trends, load_history, save_snapshot
 from .lockfile import load_transitive_counts
 from .scanner import scan
+from .summarise import summarise
 
 console = Console()
 
@@ -73,12 +78,13 @@ def _print_alternatives(results: list[FrictionResult]) -> None:
     if not flagged:
         return
     console.print()
-    console.print("[bold yellow]⚠ Unresolved CVEs — consider these alternatives:[/]")
+    console.print("[bold yellow]⚠ Unresolved vulns — consider these alternatives:[/]")
     for r in flagged:
         alts = ", ".join(f"[cyan]{a}[/]" for a in r["alternatives"])
+        n = r["cve_current"]
         console.print(
             f"  [red]{r['name']}[/] "
-            f"([red]{r['cve_current']} CVE{'s' if r['cve_current'] != 1 else ''}[/], "
+            f"([red]{n} vuln{'s' if n != 1 else ''}[/], "
             f"not fixed in latest) → {alts}"
         )
 
@@ -91,7 +97,7 @@ def _format_table(results: list[FrictionResult]) -> None:
     table.add_column("Jump")
     table.add_column("Score", justify="right")
     table.add_column("Label")
-    table.add_column("CVEs", justify="center")
+    table.add_column("Vuln", justify="center")
     color_map = {
         "Low": "green",
         "Medium": "yellow",
@@ -137,7 +143,7 @@ def _format_markdown(results: list[FrictionResult], threshold: int = 75) -> str:
             f"exceeded threshold {threshold}:** {names}\n\n"
         )
     rows = [
-        "| Package | Current | Latest | Jump | Score | Label | CVEs |",
+        "| Package | Current | Latest | Jump | Score | Label | Vuln |",
         "|---------|---------|--------|------|------:|-------|:----:|",
     ]
     for r in results:
@@ -151,7 +157,7 @@ def _format_markdown(results: list[FrictionResult], threshold: int = 75) -> str:
     alts = [r for r in results if r["alternatives"]]
     footer = ""
     if alts:
-        footer = "\n\n### ⚠️ Unresolved CVEs — consider alternatives\n\n"
+        footer = "\n\n### ⚠️ Unresolved vulns — consider alternatives\n\n"
         for r in alts:
             footer += f"- **{r['name']}** → {', '.join(r['alternatives'])}\n"
     return header + "\n".join(rows) + footer
@@ -171,15 +177,34 @@ def _format_html(results: list[FrictionResult]) -> str:
         "<h1>scori — friction scores</h1>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>Package</th><th>Current</th><th>Latest</th>"
-        "<th>Jump</th><th>Score</th><th>Label</th><th>CVEs</th></tr></thead>"
+        "<th>Jump</th><th>Score</th><th>Label</th><th>Vuln</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></body></html>"
     )
 
 
+def _summarise_result(r: FrictionResult) -> str:
+    """Fetch release text for a result and return an LLM summary."""
+    from .friction import _gather
+
+    data = _gather(r["name"])
+    releases: list[dict] = data.get("releases", [])  # type: ignore[type-arg]
+    changelog: str = data.get("changelog", "")
+    release_text = "\n".join(rel.get("body", "") for rel in releases if rel.get("body"))
+    text = f"{release_text}\n{changelog}"
+    return summarise(r["name"], r["current_version"], r["latest_version"], text)
+
+
 def _cmd_friction(args: argparse.Namespace) -> int:
+    cfg = ScoriConfig.load(Path(args.path))
+    threshold = args.threshold if args.threshold != 75 else cfg.threshold
+
     deps = scan(args.path)
+    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
     results = _compute_all(deps, project_root)
+
+    save_snapshot(project_root, results)
+
     if args.format == "json":
         print(jsonlib.dumps(results, indent=2))
     elif args.format == "html":
@@ -187,22 +212,29 @@ def _cmd_friction(args: argparse.Namespace) -> int:
         out.write_text(_format_html(results), encoding="utf-8")
         console.print(f"[green]HTML report written to {out}[/]")
     elif args.format == "markdown":
-        print(_format_markdown(results, threshold=args.threshold))
+        print(_format_markdown(results, threshold=threshold))
     else:
         _format_table(results)
         _print_alternatives(results)
+        if args.summarise:
+            flagged = [r for r in results if r["label"] in ("High", "Critical")]
+            if flagged:
+                console.print()
+                console.print("[bold]LLM update summaries:[/]")
+                for r in flagged:
+                    summary = _summarise_result(r)
+                    if summary:
+                        console.print(f"  [bold]{r['name']}[/]: [dim]{summary}[/]")
     if args.ci:
-        over = [r for r in results if r["score"] > args.threshold]
+        over = [r for r in results if r["score"] > threshold]
         if over:
             names = ", ".join(r["name"] for r in over)
             console.print(
                 f"[red]CI: {len(over)} dependenc{'y' if len(over) == 1 else 'ies'} "
-                f"exceeded threshold {args.threshold}: {names}[/]"
+                f"exceeded threshold {threshold}: {names}[/]"
             )
             return 1
-        console.print(
-            f"[green]CI: all dependencies within threshold {args.threshold}[/]"
-        )
+        console.print(f"[green]CI: all dependencies within threshold {threshold}[/]")
     return 0
 
 
@@ -214,7 +246,7 @@ def _format_monitor_table(results: list[FrictionResult]) -> None:
     table.add_column("Jump")
     table.add_column("Score", justify="right")
     table.add_column("Label")
-    table.add_column("CVEs", justify="center")
+    table.add_column("Vuln", justify="center")
     color_map = {
         "Low": "green",
         "Medium": "yellow",
@@ -241,10 +273,11 @@ def _format_monitor_table(results: list[FrictionResult]) -> None:
         r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"] for r in results
     )
     if fixes_any:
-        console.print("[dim]★ updating this package fixes known CVEs[/]")
+        console.print("[dim]★ updating this package fixes known vulns[/]")
 
 
 def _cmd_monitor(args: argparse.Namespace) -> int:
+    cfg = ScoriConfig.load(Path(args.path))
     first = True
     while True:
         if not first:
@@ -252,6 +285,7 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
         first = False
 
         deps = scan(args.path)
+        deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
         project_root = Path(args.path)
         all_results = _compute_all(deps, project_root)
 
@@ -413,7 +447,7 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
 <table>
 <thead><tr>
 <th>Package</th><th>Current</th><th>Latest</th>
-<th>Jump</th><th>Score</th><th>Label</th><th>CVEs</th><th>Recommendation</th>
+<th>Jump</th><th>Score</th><th>Label</th><th>Vuln</th><th>Recommendation</th>
 </tr></thead>
 <tbody>{rows}</tbody>
 </table>
@@ -423,7 +457,11 @@ def _build_rich_html(results: list[FrictionResult], path: str) -> str:
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
+    cfg = ScoriConfig.load(Path(args.path))
+    threshold = args.threshold if args.threshold != 75 else cfg.threshold
+
     deps = scan(args.path)
+    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
     results = _compute_all(deps, project_root)
     results.sort(key=lambda r: r["score"], reverse=True)
@@ -442,18 +480,16 @@ def _cmd_report(args: argparse.Namespace) -> int:
         console.print(f"[green]HTML report written to {out}[/]")
 
     if args.ci:
-        over = [r for r in results if r["score"] > args.threshold]
+        over = [r for r in results if r["score"] > threshold]
         if over:
             names = ", ".join(r["name"] for r in over)
             console.print(
                 f"[red]CI: {len(over)} "
                 f"dependenc{'y' if len(over) == 1 else 'ies'} "
-                f"exceeded threshold {args.threshold}: {names}[/]"
+                f"exceeded threshold {threshold}: {names}[/]"
             )
             return 1
-        console.print(
-            f"[green]CI: all dependencies within threshold {args.threshold}[/]"
-        )
+        console.print(f"[green]CI: all dependencies within threshold {threshold}[/]")
     return 0
 
 
@@ -497,6 +533,7 @@ def _backup_manifests(project_root: Path, source_files: set[str]) -> Path:
 
 
 def _cmd_update(args: argparse.Namespace) -> int:
+    cfg = ScoriConfig.load(Path(args.path))
     project_root = Path(args.path).resolve()
 
     if args.rollback:
@@ -515,6 +552,7 @@ def _cmd_update(args: argparse.Namespace) -> int:
         return 0
 
     deps = scan(args.path)
+    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     results = _compute_all(deps, project_root)
 
     max_score = (
@@ -592,6 +630,159 @@ def _cmd_update(args: argparse.Namespace) -> int:
     return 0
 
 
+_TREND_COLOR: dict[str, str] = {
+    "↑": "red",
+    "↓": "green",
+    "—": "dim",
+    "↕": "yellow",
+}
+
+
+def _cmd_history(args: argparse.Namespace) -> int:
+    project_root = Path(args.path)
+    history = load_history(project_root, limit=args.limit)
+    if not history:
+        console.print("[dim]No history yet — run scori friction to start tracking[/]")
+        return 0
+
+    trends = compute_trends(history)
+
+    # Collect all package names (preserve insertion order across entries)
+    all_pkgs: list[str] = []
+    seen: set[str] = set()
+    for entry in history:
+        for pkg in entry.get("scores", {}):
+            if pkg not in seen:
+                seen.add(pkg)
+                all_pkgs.append(pkg)
+
+    # Build date labels from timestamps
+    date_labels = [
+        datetime.fromtimestamp(e["ts"], tz=UTC).strftime("%m-%d") for e in history
+    ]
+
+    table = Table(title="scori — score history")
+    table.add_column("Package", style="bold")
+    for label in date_labels:
+        table.add_column(label, justify="right")
+    table.add_column("Trend", justify="center")
+
+    color_map = {
+        "Low": "green",
+        "Medium": "yellow",
+        "High": "orange1",
+        "Critical": "red",
+    }
+
+    def _score_label(score: int) -> str:
+        if score <= 25:
+            return "Low"
+        if score <= 50:
+            return "Medium"
+        if score <= 75:
+            return "High"
+        return "Critical"
+
+    for pkg in all_pkgs:
+        row: list[str] = [pkg]
+        for entry in history:
+            score = entry.get("scores", {}).get(pkg)
+            if score is None:
+                row.append("—")
+            else:
+                lbl = _score_label(score)
+                color = color_map.get(lbl, "white")
+                row.append(f"[{color}]{score}[/]")
+        trend = trends.get(pkg, "—")
+        trend_color = _TREND_COLOR.get(trend, "white")
+        row.append(f"[{trend_color}]{trend}[/]")
+        table.add_row(*row)
+
+    console.print(table)
+    return 0
+
+
+def _cmd_order(args: argparse.Namespace) -> int:
+    cfg = ScoriConfig.load(Path(args.path))
+    deps = scan(args.path)
+    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
+    project_root = Path(args.path)
+    results = _compute_all(deps, project_root)
+
+    # Filter to only those with available updates
+    updatable = [
+        r
+        for r in results
+        if r["current_version"] != r["latest_version"]
+        and r["current_version"] != "0.0.0"
+    ]
+
+    if not updatable:
+        console.print("[green]All dependencies are up to date.[/]")
+        return 0
+
+    label_order = {"Low": 0, "Medium": 1, "High": 2, "Critical": 3}
+
+    def _sort_key(r: FrictionResult) -> tuple[int, int, int]:
+        fixes_cves = int(r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"])
+        return (label_order.get(r["label"], 0), -fixes_cves, r["score"])
+
+    updatable.sort(key=_sort_key)
+
+    def _reason(r: FrictionResult) -> str:
+        fixes_cves = r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"]
+        parts: list[str] = []
+        if fixes_cves:
+            n = r["cve_current"] - r["cve_latest"]
+            parts.append(f"fixes {n} CVE{'s' if n != 1 else ''}")
+        jump = r["version_jump"]
+        if jump == "patch":
+            parts.append("patch update, low risk")
+        elif jump == "minor":
+            parts.append("minor version jump — run tests")
+        elif jump == "major":
+            parts.append("major version jump — review changelog")
+        if r["breaking_signals"]:
+            parts.append("breaking signals detected")
+        if r["yanked"]:
+            parts.append("current version is yanked")
+        return "; ".join(parts) if parts else r["label"].lower() + " friction"
+
+    color_map = {
+        "Low": "green",
+        "Medium": "yellow",
+        "High": "orange1",
+        "Critical": "red",
+    }
+
+    table = Table(title="scori — suggested update order")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Package")
+    table.add_column("Score", justify="right")
+    table.add_column("Label")
+    table.add_column("Reason")
+
+    for i, r in enumerate(updatable, start=1):
+        color = color_map.get(r["label"], "white")
+        fixes_cves = r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"]
+        name_cell = f"{r['name']} [yellow]★[/]" if fixes_cves else r["name"]
+        table.add_row(
+            str(i),
+            name_cell,
+            f"[{color}]{r['score']}[/]",
+            f"[{color}]{r['label']}[/]",
+            _reason(r),
+        )
+
+    console.print(table)
+    fixes_any = any(
+        r["cve_current"] > 0 and r["cve_latest"] < r["cve_current"] for r in updatable
+    )
+    if fixes_any:
+        console.print("[dim]★ updating this package fixes known vulns[/]")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scori")
     parser.add_argument("--version", action="version", version=f"scori {__version__}")
@@ -619,6 +810,11 @@ def main(argv: list[str] | None = None) -> int:
         default=75,
         metavar="SCORE",
         help="Score threshold for --ci (default: 75)",
+    )
+    p_fric.add_argument(
+        "--summarise",
+        action="store_true",
+        help="Print LLM summaries for High/Critical dependencies (table format only)",
     )
     p_fric.set_defaults(func=_cmd_friction)
 
@@ -694,6 +890,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Score threshold for --ci (default: 75)",
     )
     p_rep.set_defaults(func=_cmd_report)
+
+    p_hist = sub.add_parser(
+        "history", help="Show friction score history for the project"
+    )
+    p_hist.add_argument("--path", default=".", help="Path to the target project")
+    p_hist.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        metavar="N",
+        help="Number of historical snapshots to show (default: 10)",
+    )
+    p_hist.set_defaults(func=_cmd_history)
+
+    p_ord = sub.add_parser(
+        "order", help="Show a ranked update plan sorted by risk and CVE impact"
+    )
+    p_ord.add_argument("--path", default=".", help="Path to the target project")
+    p_ord.set_defaults(func=_cmd_order)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

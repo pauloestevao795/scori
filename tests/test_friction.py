@@ -5,6 +5,7 @@ import responses as rsps
 
 from scori._types import Dependency
 from scori.friction import (
+    _CWE_TO_OWASP,
     _alternatives_cache,
     _current_version_from_spec,
     _cvss_weight,
@@ -16,6 +17,7 @@ from scori.friction import (
     _scan_breaking,
     _venv_version,
     _version_jump,
+    _vuln_cwe_ids,
 )
 
 
@@ -111,7 +113,7 @@ def test_fetch_osv_count_api_error() -> None:
 
 def test_fetch_osv_count_uses_cache() -> None:
     _osv_cache.clear()
-    _osv_cache[("requests", "2.32.0")] = (3, 3)
+    _osv_cache[("requests", "2.32.0")] = (3, 3, [])
     assert _fetch_osv_count("requests", "2.32.0") == 3
 
 
@@ -123,15 +125,45 @@ def test_fetch_osv_critical_cvss_weight() -> None:
         "https://api.osv.dev/v1/query",
         json={
             "vulns": [
-                {"id": "GHSA-1", "database_specific": {"severity": "CRITICAL"}},
-                {"id": "GHSA-2", "database_specific": {"severity": "HIGH"}},
+                {
+                    "id": "GHSA-1",
+                    "database_specific": {
+                        "severity": "CRITICAL",
+                        "cwe_ids": ["CWE-79"],
+                    },
+                },
+                {
+                    "id": "GHSA-2",
+                    "database_specific": {
+                        "severity": "HIGH",
+                        "cwe_ids": ["CWE-89"],
+                    },
+                },
             ]
         },
         status=200,
     )
-    total, weighted = _fetch_osv("python-jose", "3.3.0")
+    total, weighted, cwe_ids = _fetch_osv("python-jose", "3.3.0")
     assert total == 2
     assert weighted == 3  # 2 (CRITICAL) + 1 (HIGH)
+    assert "CWE-79" in cwe_ids
+    assert "CWE-89" in cwe_ids
+
+
+def test_vuln_cwe_ids_deduplication() -> None:
+    vulns = [
+        {"database_specific": {"cwe_ids": ["CWE-79", "CWE-89"]}},
+        {"database_specific": {"cwe_ids": ["CWE-79"]}},  # duplicate
+    ]
+    ids = _vuln_cwe_ids(vulns)
+    assert ids.count("CWE-79") == 1
+    assert "CWE-89" in ids
+
+
+def test_cwe_to_owasp_mapping() -> None:
+    assert _CWE_TO_OWASP["CWE-79"] == "A03"  # XSS → Injection
+    assert _CWE_TO_OWASP["CWE-89"] == "A03"  # SQL Injection
+    assert _CWE_TO_OWASP["CWE-918"] == "A10"  # SSRF
 
 
 def test_cvss_weight_critical() -> None:
