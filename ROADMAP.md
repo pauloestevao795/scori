@@ -133,28 +133,23 @@ Higher-level features that turn scori from a scoring tool into a maintenance adv
 
 ---
 
-## v0.7 — `scori fix` and SBOM output
+## v0.7 — `scori fix` and SBOM output ✅
 
 Two additions with high real-world impact that require no new concepts — just
 building on the data already computed.
 
 ### `scori fix` — automated update PR
 
-- [ ] `scori fix --path .`: open a GitHub pull request with the recommended
-  updates from `scori order`, using the GitHub API (requires `GITHUB_TOKEN`)
-- [ ] PR body includes the full friction table and breaking signal details
-- [ ] `--dry-run` mode prints what the PR would contain without creating it
-- [ ] `--max-friction <label>`: limit updates included in the PR (same semantics
-  as `scori update --max-friction`)
+- [x] `scori fix --path . [--apply] [--max-friction LABEL]`: open a GitHub PR
+  with the recommended updates; dry run by default, `--apply` creates the PR
+- [x] PR body includes the full friction table ordered by lowest risk first
+- [x] `--max-friction <label>`: limit updates included in the PR
 
 ### SBOM output (CycloneDX)
 
-- [ ] `scori friction --format cyclonedx`: emit a CycloneDX 1.5 JSON Software
-  Bill of Materials enriched with friction scores and vulnerability data
-- [ ] Each component carries `properties` for `scori:friction-score`,
-  `scori:label`, and `scori:cwe-ids`
-- [ ] Enables downstream compliance tooling (NTIA, EU CRA, US EO 14028)
-  without requiring a separate SBOM tool
+- [x] `scori friction --format cyclonedx`: CycloneDX 1.5 JSON with purl,
+  `scori:friction-score`, `scori:label`, `scori:cwe-ids`, `scori:breaking-signals`
+- [x] Enables downstream compliance tooling (NTIA, EU CRA, US EO 14028)
 
 ---
 

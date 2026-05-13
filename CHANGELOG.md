@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-05-13
+
+### Added
+
+- `scori fix` command: opens a GitHub pull request with the recommended
+  dependency updates from `scori order`. Requires `GITHUB_TOKEN`. Default is
+  dry run (shows the proposed PR table without touching git); `--apply` creates
+  the branch, commits the version bumps, pushes, and opens the PR via the
+  GitHub REST API. `--max-friction <label>` limits the updates included.
+- `scori friction --format cyclonedx`: emits a CycloneDX 1.5 JSON Software
+  Bill of Materials. Each component carries standard fields (`name`, `version`,
+  `purl`) plus scori-specific properties: `scori:friction-score`, `scori:label`,
+  `scori:version-jump`, `scori:latest-version`, `scori:cwe-ids`, and
+  `scori:breaking-signals`. Enables downstream compliance tooling without
+  requiring a separate SBOM tool.
+
 ## [0.6.0] - 2026-05-13
 
 ### Added

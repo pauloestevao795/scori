@@ -24,6 +24,7 @@ uv add scori
 # Show friction scores for every dependency
 scori friction --path .
 scori friction --path . --format json > report.json
+scori friction --path . --format cyclonedx > sbom.cdx.json  # CycloneDX 1.5 SBOM
 scori friction --path . --format html        # writes scori-report.html
 scori friction --path . --format markdown    # markdown table (GitHub / PR comments)
 scori friction --path . --ci                 # exit 1 if any score > 75
@@ -55,6 +56,11 @@ scori history --path . --limit 20            # last 20 snapshots
 # Recommended update order
 scori order --path .                         # rank deps by update priority + conflict warnings
 scori order --path . --stub-diff             # include .pyi stub diff signals in ranking
+
+# Open a GitHub PR with the recommended updates (requires GITHUB_TOKEN)
+scori fix --path .                           # dry run: preview PR contents
+scori fix --path . --apply                   # create the PR
+scori fix --path . --apply --max-friction low  # only safe (Low) updates
 
 # List all detected dependencies
 scori scan --path .
@@ -215,7 +221,8 @@ packages = ["boto3", "some-internal-lib"]  # skip these deps entirely
 
 ## Roadmap
 
-- **v0.7** — VSCode extension (inline friction scores + CodeLens), Docker image label version resolution, constraint-level conflict detection (parse `Requires-Dist` from wheel METADATA)
+- **v1.0** — stable API guarantee, `Pipfile`/`conda.yml` support, parallel HTTP fetch, integration tests against real projects
+- **Beyond Python** — `scori-js` for Node.js (`package.json` + npm registry + OSV) as the highest-value next ecosystem
 
 ## Contributing
 
