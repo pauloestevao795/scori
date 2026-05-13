@@ -28,3 +28,5 @@ uv.lock
 # scori
 .scori/
 scori-report.html
+make_pdf.py
+scori-marketing.pdf
