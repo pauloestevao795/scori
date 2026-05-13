@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
-## [Unreleased] - v0.6.0
+## [0.6.0] - 2026-05-13
 
 ### Added
 
@@ -30,7 +30,7 @@ semantic versioning [SemVer](https://semver.org/).
 - `CONTRIBUTING.md`: local setup, code style, how to add a new breaking-signal
   detector, and priority areas for external contribution.
 
-## [Unreleased] - v0.5.0
+## [0.5.0] - 2026-05-13
 
 ### Added
 

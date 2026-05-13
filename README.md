@@ -145,14 +145,14 @@ Set `GITHUB_TOKEN` in your environment to raise the GitHub API rate limit from 6
 
 ### Version resolution
 
-For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directly. For unpinned dependencies (`uvicorn` with no version), scori looks up the installed version in the project's local venv (`.venv/`, `venv/`, or `env/`) before falling back to `0.0.0`.
+For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directly. For unpinned dependencies, scori resolves the installed version from (in order): local venv (`.venv/`, `venv/`, `env/`), active conda environment (`conda list --json`), active pyenv Python (`.python-version`). Falls back to `0.0.0` when none of these resolve.
 
 ## GitHub Actions
 
 Add scori to any workflow in one step:
 
 ```yaml
-- uses: pauloestevao795/scori@v0.4.0
+- uses: pauloestevao795/scori@v0.6.0
   with:
     threshold: '75'       # fail if any dep score exceeds this (default: 75)
     comment-pr: 'true'    # post friction table as a PR comment
@@ -177,7 +177,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: pauloestevao795/scori@v0.4.0
+      - uses: pauloestevao795/scori@v0.6.0
         with:
           threshold: '75'
           comment-pr: 'true'
@@ -190,7 +190,7 @@ jobs:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/pauloestevao795/scori
-    rev: v0.4.0
+    rev: v0.6.0
     hooks:
       - id: scori-friction
         args: [--threshold, '75']  # optional: override default threshold

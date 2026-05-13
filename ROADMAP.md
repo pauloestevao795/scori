@@ -97,11 +97,6 @@ Bring scori into the workflows and tools developers already use.
 - [x] Official hook for `.pre-commit-config.yaml` (`.pre-commit-hooks.yaml`)
 - [x] Configurable threshold — block commit if any dep exceeds it
 
-### VSCode Extension *(stretch goal)*
-
-- [ ] Inline decoration showing the friction score per line in `requirements.txt` / `pyproject.toml`
-- [ ] CodeLens action: "Run scori friction on this package"
-
 ---
 
 ## v0.5 — Intelligence layer ✅
@@ -138,28 +133,100 @@ Higher-level features that turn scori from a scoring tool into a maintenance adv
 
 ---
 
+## v0.7 — `scori fix` and SBOM output
+
+Two additions with high real-world impact that require no new concepts — just
+building on the data already computed.
+
+### `scori fix` — automated update PR
+
+- [ ] `scori fix --path .`: open a GitHub pull request with the recommended
+  updates from `scori order`, using the GitHub API (requires `GITHUB_TOKEN`)
+- [ ] PR body includes the full friction table and breaking signal details
+- [ ] `--dry-run` mode prints what the PR would contain without creating it
+- [ ] `--max-friction <label>`: limit updates included in the PR (same semantics
+  as `scori update --max-friction`)
+
+### SBOM output (CycloneDX)
+
+- [ ] `scori friction --format cyclonedx`: emit a CycloneDX 1.5 JSON Software
+  Bill of Materials enriched with friction scores and vulnerability data
+- [ ] Each component carries `properties` for `scori:friction-score`,
+  `scori:label`, and `scori:cwe-ids`
+- [ ] Enables downstream compliance tooling (NTIA, EU CRA, US EO 14028)
+  without requiring a separate SBOM tool
+
+---
+
+## v1.0 — Stable release
+
+- [ ] Stable public API guarantee: `FrictionResult`, `Dependency`, `compute()`
+  will not change in backwards-incompatible ways in 1.x releases
+- [ ] `Pipfile` / `Pipfile.lock` manifest support
+- [ ] `conda.yml` environment file support
+- [ ] Integration test suite against well-known real-world projects
+- [ ] Performance: parallel HTTP fetching across dependencies (currently serial)
+
+---
+
+## Beyond Python — scori for other ecosystems
+
+The friction score algorithm is language-agnostic. The language-specific parts
+are thin adapters: a manifest parser, a registry client, and a lockfile parser.
+OSV already covers npm, Rust, Go, Ruby, and Maven — so the vulnerability layer
+transfers immediately.
+
+The most valuable ecosystems to target next, ranked by impact:
+
+| Ecosystem | Manifest | Registry | Vuln DB |
+| --- | --- | --- | --- |
+| **Node.js** | `package.json` + `package-lock.json` | npm registry API | OSV ✓ |
+| **Rust** | `Cargo.toml` + `Cargo.lock` | crates.io API | OSV ✓ / RustSec |
+| **Go** | `go.mod` + `go.sum` | proxy.golang.org | OSV ✓ |
+| **Ruby** | `Gemfile` + `Gemfile.lock` | rubygems.org API | OSV ✓ |
+
+Two approaches are possible:
+
+- **Separate CLIs** — `scori-js`, `scori-rs`, etc., each a standalone tool in
+  the target language. Simpler to maintain; idiomatic for each ecosystem.
+- **Multi-language core** — one `scori` binary with subcommands per ecosystem
+  (`scori friction --lang npm`). Better UX for polyglot projects; harder to
+  maintain.
+
+A separate CLI per language is the recommended starting point. The Node.js
+ecosystem (`npm` / `pnpm` / `yarn`) is the highest-value target given its
+size and the frequency of `npm audit`-style security events.
+
+---
+
 ## Non-goals
 
 scori has a deliberate scope. The following are explicitly out of scope:
 
-- **Not a CVE scanner.** scori shows CVE counts as context, but `pip-audit` and OSV-Scanner do this properly. Use them alongside scori, not instead.
-- **Not a package manager.** scori reads and optionally edits manifests, but it does not resolve or install packages.
-- **Python only.** Supporting npm, cargo, or other ecosystems is out of scope. scori's scoring model is designed around the PyPI and GitHub release data available for Python packages.
-- **No account required.** scori will never require a login, subscription, or mandatory API key. Optional tokens (e.g. `GITHUB_TOKEN`) may improve rate limits, but the tool is always fully functional without them.
+- **Not a CVE scanner.** scori shows CVE counts as context, but `pip-audit` and
+  OSV-Scanner do this properly. Use them alongside scori, not instead.
+- **Not a package manager.** scori reads and optionally edits manifests, but it
+  does not resolve or install packages.
+- **No account required.** scori will never require a login, subscription, or
+  mandatory API key. Optional tokens (e.g. `GITHUB_TOKEN`) improve rate limits,
+  but the tool is always fully functional without them.
 
 ---
 
 ## How to contribute
 
-Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) (coming soon) for the full guide.
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
+full guide.
 
 **Priority areas for external contributions:**
 
-- Manifest parsers for additional formats (`conda.yml`, `Pipfile`, `Pipfile.lock`)
 - Integration tests against well-known real-world projects
-- CLI message internationalisation (i18n)
+- `Pipfile` / `Pipfile.lock` manifest parser
+- `conda.yml` environment file parser
+- Parallel HTTP fetching in `compute()` for faster multi-dependency runs
 
-Issues labelled **`good first issue`** on GitHub are the recommended starting point for new contributors.
+Issues labelled **`good first issue`** on GitHub are the recommended starting
+point for new contributors.
 
 ---
 
@@ -170,4 +237,5 @@ scori follows [Semantic Versioning](https://semver.org).
 - Patch releases (`0.x.y`) fix bugs without changing behaviour.
 - Minor releases (`0.x`) add features in a backwards-compatible way.
 - Breaking changes to the CLI interface will only occur in major releases.
-- The public API (`FrictionResult`, `Dependency`, `compute()`) is considered stable from v1.0 onwards. Until then, minor releases may include breaking changes to the Python API — the CLI surface is the stable interface.
+- The public Python API (`FrictionResult`, `Dependency`, `compute()`) is
+  considered stable from v1.0 onwards.
