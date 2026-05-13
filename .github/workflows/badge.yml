@@ -25,11 +25,12 @@ jobs:
         run: |
           scori friction --path . --format json > /tmp/scori-results.json || true
           python3 - <<'EOF'
-          import json
+          import json, statistics
 
           try:
               results = json.load(open("/tmp/scori-results.json"))
-              score = round(sum(r["score"] for r in results) / len(results)) if results else 0
+              scores = [r["score"] for r in results]
+              score = round(statistics.median(scores)) if scores else 0
           except Exception:
               score = 0
 
@@ -44,7 +45,7 @@ jobs:
 
           badge = {
               "schemaVersion": 1,
-              "label": "avg friction",
+              "label": "friction",
               "message": f"{score} · {label}",
               "color": color,
           }
