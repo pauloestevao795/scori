@@ -52,6 +52,7 @@ dev = [
   "responses>=0.25",
   "types-requests",
   "reportlab>=4.5.1",
+  "pip-audit>=2.10.0",
 ]
 
 [tool.ruff]
