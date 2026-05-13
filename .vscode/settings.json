@@ -13,5 +13,6 @@
     "**/__pycache__": true,
     "**/.mypy_cache": true
   },
-  "snyk.advanced.autoSelectOrganization": true
+  "snyk.advanced.autoSelectOrganization": true,
+  "snyk.advanced.organization": "2014c7e6-a573-4be5-bf88-bb5f6e4d3879"
 }

@@ -71,3 +71,101 @@ def load_transitive_counts(project_root: Path) -> dict[str, int]:
             except Exception:
                 pass
     return {}
+
+
+# ------------------------------ conflict detection ------------------------------
+
+
+def _parse_uv_dep_graph(path: Path) -> dict[str, set[str]]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    graph: dict[str, set[str]] = {}
+    for pkg in data.get("package", []):
+        name = _normalize(str(pkg.get("name") or ""))
+        if not name:
+            continue
+        deps = pkg.get("dependencies", [])
+        graph[name] = {
+            _normalize(str(d.get("name") or ""))
+            for d in (deps if isinstance(deps, list) else [])
+            if isinstance(d, dict) and d.get("name")
+        }
+    return graph
+
+
+def _parse_poetry_dep_graph(path: Path) -> dict[str, set[str]]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    graph: dict[str, set[str]] = {}
+    for pkg in data.get("package", []):
+        name = _normalize(str(pkg.get("name") or ""))
+        if not name:
+            continue
+        deps = pkg.get("dependencies", {})
+        graph[name] = (
+            {_normalize(str(d)) for d in deps} if isinstance(deps, dict) else set()
+        )
+    return graph
+
+
+def _build_dep_graph(project_root: Path) -> dict[str, set[str]]:
+    for lockfile, parser in (
+        (project_root / "uv.lock", _parse_uv_dep_graph),
+        (project_root / "poetry.lock", _parse_poetry_dep_graph),
+    ):
+        if lockfile.exists():
+            try:
+                return parser(lockfile)
+            except Exception:
+                pass
+    return {}
+
+
+def _transitive_deps(graph: dict[str, set[str]], start: str) -> set[str]:
+    """BFS to collect all transitive dependencies of start."""
+    visited: set[str] = set()
+    queue = list(graph.get(start, set()))
+    while queue:
+        node = queue.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        queue.extend(graph.get(node, set()))
+    return visited
+
+
+def detect_update_conflicts(
+    project_root: Path,
+    packages: list[str],
+) -> list[str]:
+    """Detect pairs of packages that share transitive dependencies.
+
+    When two packages in the same update batch share a transitive dep, updating
+    them simultaneously may trigger cascading changes in that shared dep.
+    Returns human-readable warning strings (one per conflicting pair).
+    """
+    if len(packages) < 2:
+        return []
+    graph = _build_dep_graph(project_root)
+    if not graph:
+        return []
+
+    normed = [_normalize(p) for p in packages]
+    trans = {p: _transitive_deps(graph, p) for p in normed}
+
+    warnings: list[str] = []
+    seen: set[frozenset[str]] = set()
+    for i, a in enumerate(normed):
+        for b in normed[i + 1 :]:
+            pair: frozenset[str] = frozenset({a, b})
+            if pair in seen:
+                continue
+            seen.add(pair)
+            shared = trans[a] & trans[b]
+            if not shared:
+                continue
+            top = sorted(shared)[:3]
+            suffix = " and more" if len(shared) > 3 else ""
+            warnings.append(
+                f"{a} + {b} share transitive deps ({', '.join(top)}{suffix})"
+                " — update and test together"
+            )
+    return warnings

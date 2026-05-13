@@ -6,6 +6,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/scori.svg)](https://pypi.org/project/scori/)
 [![License](https://img.shields.io/pypi/l/scori.svg)](LICENSE)
 [![CI](https://github.com/pauloestevao795/scori/actions/workflows/ci.yml/badge.svg)](https://github.com/pauloestevao795/scori/actions/workflows/ci.yml)
+[![friction](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pauloestevao795/scori/main/badge.json)](https://github.com/pauloestevao795/scori)
 
 Free tools like `pip-audit`, OSV-Scanner, and Dependabot detect vulnerabilities and open update PRs — but none of them answer the question that matters: *is it worth updating this lib right now, or does the migration cost outweigh the risk of not doing it?* `scori` quantifies that friction as a single 0–100 score per dependency, using public data from PyPI, GitHub, and the OSV vulnerability database.
 
@@ -28,6 +29,7 @@ scori friction --path . --format markdown    # markdown table (GitHub / PR comme
 scori friction --path . --ci                 # exit 1 if any score > 75
 scori friction --path . --ci --threshold 50  # stricter gate
 scori friction --path . --summarise          # LLM plain-language summary per update
+scori friction --path . --stub-diff          # diff .pyi stubs for API removal signals (slow)
 
 # Show only dependencies with updates available, sorted by friction
 scori monitor --path .
@@ -51,7 +53,8 @@ scori history --path .                       # last 10 snapshots with ↑↓ tre
 scori history --path . --limit 20            # last 20 snapshots
 
 # Recommended update order
-scori order --path .                         # rank deps by update priority
+scori order --path .                         # rank deps by update priority + conflict warnings
+scori order --path . --stub-diff             # include .pyi stub diff signals in ranking
 
 # List all detected dependencies
 scori scan --path .
@@ -212,7 +215,7 @@ packages = ["boto3", "some-internal-lib"]  # skip these deps entirely
 
 ## Roadmap
 
-- **v0.6** — conda/pyenv version resolution, `.pyi` stub diff for API-change detection, dynamic README badge
+- **v0.7** — VSCode extension (inline friction scores + CodeLens), Docker image label version resolution, constraint-level conflict detection (parse `Requires-Dist` from wheel METADATA)
 
 ## Contributing
 

@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from scori.lockfile import load_transitive_counts, parse_poetry_lock, parse_uv_lock
+from scori.lockfile import (
+    detect_update_conflicts,
+    load_transitive_counts,
+    parse_poetry_lock,
+    parse_uv_lock,
+)
 
 _UV_LOCK = """\
 version = 1
@@ -111,3 +116,39 @@ def test_load_transitive_counts_prefers_uv_lock(tmp_path: Path) -> None:
 def test_load_transitive_counts_corrupt_lockfile(tmp_path: Path) -> None:
     (tmp_path / "uv.lock").write_text("not valid toml !!!", encoding="utf-8")
     assert load_transitive_counts(tmp_path) == {}
+
+
+# ------------------------------ conflict detection ------------------------------
+
+
+def test_detect_update_conflicts_shared_dep(tmp_path: Path) -> None:
+    (tmp_path / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    # fastapi and starlette both transitively depend on anyio
+    warnings = detect_update_conflicts(tmp_path, ["fastapi", "starlette"])
+    assert len(warnings) == 1
+    assert "fastapi" in warnings[0]
+    assert "starlette" in warnings[0]
+    assert "anyio" in warnings[0]
+
+
+def test_detect_update_conflicts_no_shared_dep(tmp_path: Path) -> None:
+    (tmp_path / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    # fastapi and anyio: anyio has no deps so no shared transitive dep
+    warnings = detect_update_conflicts(tmp_path, ["fastapi", "anyio"])
+    assert warnings == []
+
+
+def test_detect_update_conflicts_single_package(tmp_path: Path) -> None:
+    (tmp_path / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    assert detect_update_conflicts(tmp_path, ["fastapi"]) == []
+
+
+def test_detect_update_conflicts_no_lockfile(tmp_path: Path) -> None:
+    assert detect_update_conflicts(tmp_path, ["fastapi", "starlette"]) == []
+
+
+def test_detect_update_conflicts_poetry_lock(tmp_path: Path) -> None:
+    (tmp_path / "poetry.lock").write_text(_POETRY_LOCK, encoding="utf-8")
+    warnings = detect_update_conflicts(tmp_path, ["fastapi", "starlette"])
+    assert len(warnings) == 1
+    assert "anyio" in warnings[0]

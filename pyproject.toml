@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scori"
-version = "0.5.0"
+version = "0.6.0"
 description = "Software Composition Risk Intelligence — score the real cost of updating a dependency"
 readme = "README.md"
 license = "MIT"

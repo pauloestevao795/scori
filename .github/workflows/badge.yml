@@ -1,0 +1,61 @@
+name: scori badge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install scori
+        run: pip install scori
+
+      - name: Compute friction scores
+        run: |
+          scori friction --path . --format json > /tmp/scori-results.json || true
+          python3 - <<'EOF'
+          import json
+
+          try:
+              results = json.load(open("/tmp/scori-results.json"))
+              score = round(sum(r["score"] for r in results) / len(results)) if results else 0
+          except Exception:
+              score = 0
+
+          if score <= 25:
+              color, label = "brightgreen", "Low"
+          elif score <= 50:
+              color, label = "yellow", "Medium"
+          elif score <= 75:
+              color, label = "orange", "High"
+          else:
+              color, label = "red", "Critical"
+
+          badge = {
+              "schemaVersion": 1,
+              "label": "avg friction",
+              "message": f"{score} · {label}",
+              "color": color,
+          }
+          json.dump(badge, open("badge.json", "w"))
+          print(f"Badge: {score} ({label})")
+          EOF
+
+      - name: Commit badge.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add badge.json
+          git diff --staged --quiet || git commit -m "chore: update friction badge [skip ci]"
+          git push

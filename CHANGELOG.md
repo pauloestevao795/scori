@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [Unreleased] - v0.6.0
+
+### Added
+
+- `.pyi` stub diff as an opt-in breaking signal (`--stub-diff` flag on
+  `scori friction` and `scori order`): downloads the current and latest wheels
+  from PyPI, extracts public symbols from `.pyi` stubs (falling back to `.py`
+  source), and reports removed public names as breaking signals. Off by default
+  to avoid slowing down regular runs.
+- Conflict detection in `scori order`: after ranking the update queue, scori
+  now reads the lockfile to identify pairs of packages that share transitive
+  dependencies. Packages in the same update batch with shared transitive deps
+  are flagged with a "test together" warning so cascading changes aren't missed.
+- Conda version resolution: `_current_version_from_spec` now tries
+  `conda list --json` as a fallback when no local venv is found, so conda
+  environments get accurate installed-version data without pinning.
+- Pyenv version resolution: similarly, scori reads `.python-version` and checks
+  the active pyenv Python's `site-packages` as an additional fallback.
+- Dynamic friction badge for README: a new GitHub Actions workflow
+  (`.github/workflows/badge.yml`) runs on every push to `main`, computes the
+  average friction score across all project dependencies, writes a
+  shields.io-compatible `badge.json`, and commits it back to the repo. The
+  README badge auto-updates on the next page load.
+- `CONTRIBUTING.md`: local setup, code style, how to add a new breaking-signal
+  detector, and priority areas for external contribution.
+
 ## [Unreleased] - v0.5.0
 
 ### Added

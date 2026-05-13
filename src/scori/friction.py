@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import time
 import xmlrpc.client
 from datetime import UTC, datetime
@@ -62,6 +63,63 @@ def _venv_version(project_root: Path, package: str) -> str | None:
                 dist_key = re.sub(r"[-_.]+", "_", stem[:idx]).lower()
                 if dist_key == pkg_key:
                     return stem[idx + 1 :]
+    return None
+
+
+def _conda_version(package: str) -> str | None:
+    """Look up the installed version via `conda list --json`."""
+    pkg_key = re.sub(r"[-_.]+", "_", package).lower()
+    try:
+        out = subprocess.run(
+            ["conda", "list", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if out.returncode != 0:
+            return None
+        for entry in json.loads(out.stdout):
+            name_key = re.sub(r"[-_.]+", "_", str(entry.get("name") or "")).lower()
+            if name_key == pkg_key:
+                ver = str(entry.get("version") or "").strip()
+                return ver or None
+    except Exception:
+        pass
+    return None
+
+
+def _pyenv_version(package: str, project_root: Path) -> str | None:
+    """Look up the installed version from the active pyenv Python's site-packages."""
+    pkg_key = re.sub(r"[-_.]+", "_", package).lower()
+    try:
+        root_out = subprocess.run(
+            ["pyenv", "root"], capture_output=True, text=True, timeout=5
+        )
+        if root_out.returncode != 0:
+            return None
+        pyenv_root = Path(root_out.stdout.strip())
+    except Exception:
+        return None
+
+    # Read the active python version from .python-version (project-local or global)
+    for pv_file in (project_root / ".python-version", Path.home() / ".python-version"):
+        if pv_file.exists():
+            py_ver = pv_file.read_text().strip().splitlines()[0]
+            lib_dir = pyenv_root / "versions" / py_ver / "lib"
+            if not lib_dir.is_dir():
+                continue
+            for py_dir in lib_dir.iterdir():
+                sp = py_dir / "site-packages"
+                if not sp.is_dir():
+                    continue
+                for dist_info in sp.glob("*.dist-info"):
+                    stem = dist_info.stem
+                    idx = stem.rfind("-")
+                    if idx == -1:
+                        continue
+                    dist_key = re.sub(r"[-_.]+", "_", stem[:idx]).lower()
+                    if dist_key == pkg_key:
+                        return stem[idx + 1 :]
     return None
 
 
@@ -466,7 +524,11 @@ def _current_version_from_spec(
       4. "0.0.0" when nothing is resolvable
     """
     if package and project_root:
-        installed = _venv_version(project_root, package)
+        installed = (
+            _venv_version(project_root, package)
+            or _conda_version(package)
+            or _pyenv_version(package, project_root)
+        )
         if installed:
             return installed
     if not spec:
@@ -479,6 +541,7 @@ def compute(
     dep: Dependency,
     transitive_affected: int = 0,
     project_root: Path | None = None,
+    stub_diff: bool = False,
 ) -> FrictionResult:
     """Compute the FrictionResult for a dependency."""
     data = _gather(dep["name"])
@@ -491,6 +554,10 @@ def compute(
 
     jump, jump_pts = _version_jump(current, latest)
     signals = _scan_breaking(releases, current, latest, changelog)
+    if stub_diff:
+        from .stubdiff import stub_signals
+
+        signals = signals + stub_signals(dep["name"], current, latest)
     signal_pts = min(20, 4 * len(signals))
     transitive_pts = min(15, 3 * transitive_affected)
     months = _months_outdated(pypi, current)

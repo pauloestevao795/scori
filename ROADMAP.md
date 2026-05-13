@@ -72,12 +72,12 @@ Improve the accuracy and depth of the friction score algorithm.
 
 - [x] Scan `CHANGELOG.md` from the GitHub repo in addition to release notes
 - [x] Detect `BREAKING CHANGE:` in Conventional Commits commit history
-- [ ] Heuristic diff of `.pyi` type stub files between versions as an API-change signal
+- [x] Heuristic diff of `.pyi` type stub files between versions as an API-change signal (`--stub-diff`)
 
 ### Broader version resolution
 
-- [ ] Resolve unpinned versions via `conda list --json` when inside a conda environment
-- [ ] Support pyenv shims as a version source
+- [x] Resolve unpinned versions via `conda list --json` when inside a conda environment
+- [x] Support pyenv shims as a version source
 - [ ] Optional: detect version from Docker image labels (requires Docker CLI, off by default)
 
 ---
@@ -90,7 +90,7 @@ Bring scori into the workflows and tools developers already use.
 
 - [x] Composite action (`action.yml`) — install scori + run friction check in one step
 - [x] Automatic PR comment with the markdown friction table (`comment-pr: true`)
-- [ ] Dynamic badge for `README.md` showing the project's average friction score
+- [x] Dynamic badge for `README.md` showing the project's average friction score (`badge.json` via GitHub Actions)
 
 ### Pre-commit hook
 
@@ -122,7 +122,7 @@ Higher-level features that turn scori from a scoring tool into a maintenance adv
 ### Suggested update order
 
 - [x] `scori order` command: ranks deps by update priority (friction + vuln data)
-- [ ] Detect conflicts between simultaneous updates (e.g. shared transitive dep with incompatible constraints)
+- [x] Detect conflicts between simultaneous updates: shared transitive deps flagged in `scori order`
 
 ### LLM-assisted changelog summary *(opt-in)*
 

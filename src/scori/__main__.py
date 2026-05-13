@@ -29,21 +29,25 @@ from ._types import Dependency, FrictionResult
 from .config import ScoriConfig
 from .friction import compute
 from .history import compute_trends, load_history, save_snapshot
-from .lockfile import load_transitive_counts
+from .lockfile import detect_update_conflicts, load_transitive_counts
 from .scanner import scan
 from .summarise import summarise
 
 console = Console()
 
 
-def _compute_all(deps: list[Dependency], project_root: Path) -> list[FrictionResult]:
-
+def _compute_all(
+    deps: list[Dependency],
+    project_root: Path,
+    stub_diff: bool = False,
+) -> list[FrictionResult]:
     transitive = load_transitive_counts(project_root)
     return [
         compute(
             d,
             transitive_affected=transitive.get(d["name"].lower(), 0),
             project_root=project_root,
+            stub_diff=stub_diff,
         )
         for d in deps
     ]
@@ -201,7 +205,7 @@ def _cmd_friction(args: argparse.Namespace) -> int:
     deps = scan(args.path)
     deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
-    results = _compute_all(deps, project_root)
+    results = _compute_all(deps, project_root, stub_diff=args.stub_diff)
 
     save_snapshot(project_root, results)
 
@@ -707,7 +711,9 @@ def _cmd_order(args: argparse.Namespace) -> int:
     deps = scan(args.path)
     deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
-    results = _compute_all(deps, project_root)
+    results = _compute_all(
+        deps, project_root, stub_diff=getattr(args, "stub_diff", False)
+    )
 
     # Filter to only those with available updates
     updatable = [
@@ -780,6 +786,13 @@ def _cmd_order(args: argparse.Namespace) -> int:
     )
     if fixes_any:
         console.print("[dim]★ updating this package fixes known vulns[/]")
+
+    conflicts = detect_update_conflicts(project_root, [r["name"] for r in updatable])
+    if conflicts:
+        console.print()
+        console.print("[bold yellow]⚠ Shared transitive dependencies detected:[/]")
+        for c in conflicts:
+            console.print(f"  [yellow]{c}[/]")
     return 0
 
 
@@ -815,6 +828,11 @@ def main(argv: list[str] | None = None) -> int:
         "--summarise",
         action="store_true",
         help="Print LLM summaries for High/Critical dependencies (table format only)",
+    )
+    p_fric.add_argument(
+        "--stub-diff",
+        action="store_true",
+        help="Download wheels and diff .pyi stubs for API removal signals (slow)",
     )
     p_fric.set_defaults(func=_cmd_friction)
 
@@ -908,6 +926,11 @@ def main(argv: list[str] | None = None) -> int:
         "order", help="Show a ranked update plan sorted by risk and CVE impact"
     )
     p_ord.add_argument("--path", default=".", help="Path to the target project")
+    p_ord.add_argument(
+        "--stub-diff",
+        action="store_true",
+        help="Download wheels and diff .pyi stubs for API removal signals (slow)",
+    )
     p_ord.set_defaults(func=_cmd_order)
 
     args = parser.parse_args(argv)
