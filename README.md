@@ -66,6 +66,8 @@ scori fix --path . --apply --max-friction low  # only safe (Low) updates
 scori scan --path .
 ```
 
+Supported manifest formats: `requirements*.txt`, `pyproject.toml`, `setup.cfg`, `Pipfile`, `environment.yml` / `conda.yml`.
+
 Example output (`scori friction --format table`, with color indicators):
 
 ```text
@@ -158,7 +160,7 @@ For pinned dependencies (`fastapi==0.115.8`), the pinned version is used directl
 Add scori to any workflow in one step:
 
 ```yaml
-- uses: pauloestevao795/scori@v0.6.0
+- uses: pauloestevao795/scori@v1.0.0
   with:
     threshold: '75'       # fail if any dep score exceeds this (default: 75)
     comment-pr: 'true'    # post friction table as a PR comment
@@ -183,7 +185,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: pauloestevao795/scori@v0.6.0
+      - uses: pauloestevao795/scori@v1.0.0
         with:
           threshold: '75'
           comment-pr: 'true'
@@ -196,7 +198,7 @@ jobs:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/pauloestevao795/scori
-    rev: v0.6.0
+    rev: v1.0.0
     hooks:
       - id: scori-friction
         args: [--threshold, '75']  # optional: override default threshold
@@ -205,6 +207,33 @@ repos:
 The hook runs `scori friction --ci` and blocks the commit if any dependency
 exceeds the threshold. It only fires when `requirements*.txt`, `pyproject.toml`,
 or `setup.cfg` are staged.
+
+## Python API
+
+`scori` exposes a stable public API from version 1.0 onwards. `FrictionResult`, `Dependency`, `compute()`, and `scan()` will not change in backwards-incompatible ways in 1.x releases.
+
+```python
+from scori import compute, scan, Dependency, FrictionResult
+
+# Discover all dependencies in a project tree
+deps = scan("/path/to/project")
+
+# Score a single dependency
+result: FrictionResult = compute(Dependency(
+    name="django",
+    version_spec="==3.2.0",
+    source_file="requirements.txt",
+))
+
+print(result["score"])           # 78
+print(result["label"])           # "Critical"
+print(result["version_jump"])    # "major"
+print(result["recommendation"])
+```
+
+`FrictionResult` fields: `name`, `current_version`, `latest_version`, `score`, `label`, `version_jump`, `breaking_signals`, `transitive_affected`, `months_outdated`, `yanked`, `recommendation`, `cve_current`, `cve_latest`, `cwe_ids`, `alternatives`.
+
+---
 
 ## Configuration
 
@@ -221,8 +250,12 @@ packages = ["boto3", "some-internal-lib"]  # skip these deps entirely
 
 ## Roadmap
 
-- **v1.0** — stable API guarantee, `Pipfile`/`conda.yml` support, parallel HTTP fetch, integration tests against real projects
-- **Beyond Python** — `scori-js` for Node.js (`package.json` + npm registry + OSV) as the highest-value next ecosystem
+- **v1.0 ✅** — stable API guarantee, `Pipfile`/`conda.yml` support, parallel HTTP fetch, integration tests
+- **v1.1** — Node.js ecosystem (`package.json` + npm registry + OSV)
+- **v1.2** — Go and Rust ecosystems
+- **v1.3** — Java and C# / .NET ecosystems
+
+See [ROADMAP.md](ROADMAP.md) for the full multi-ecosystem plan.
 
 ## Contributing
 

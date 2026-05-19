@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.0.0] - 2026-05-19
+
+### Added
+
+- **Stable public API**: `FrictionResult`, `Dependency`, `FrictionLabel`, `VersionJump`,
+  `compute()`, and `scan()` are now exported directly from the `scori` package and will
+  not change in backwards-incompatible ways in 1.x releases.
+- **`Pipfile` manifest support**: reads `[packages]` and `[dev-packages]` sections,
+  handling both string specs (`">=2.0"`, `"*"`) and inline table specs
+  (`{version = "==4.2.0", extras = ["bcrypt"]}`).
+- **`conda.yml` / `environment.yml` support**: reads `dependencies:` sections including
+  nested `pip:` blocks; normalises conda `=` exact pinning to PEP 508 `==`; supports
+  all four common filename variants (`environment.yml`, `environment.yaml`, `conda.yml`,
+  `conda.yaml`).
+- **Integration test suite** (`tests/test_integration.py`): tests `compute()` and `scan()`
+  against real PyPI packages and real-world project layouts. Run with `pytest -m integration`.
+  Excluded from the default test run to avoid mandatory network access in CI.
+- **Parallel HTTP fetching**: dependency scores are now computed concurrently via
+  `ThreadPoolExecutor` (up to 16 workers), significantly reducing wall-clock time on
+  projects with many dependencies.
+
+### Changed
+
+- Development status classifier updated from `Alpha` to `Production/Stable`.
+- GitHub Actions example and pre-commit hook reference updated to `v1.0.0`.
+
 ## [0.7.1] - 2026-05-13
 
 ### Fixed

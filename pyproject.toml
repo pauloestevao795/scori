@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scori"
-version = "0.7.1"
+version = "1.0.0"
 description = "Software Composition Risk Intelligence — score the real cost of updating a dependency"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Paulo Estevao", email = "pestevao@scori.dev" }]
 keywords = ["sca", "dependencies", "security", "risk", "score", "friction", "update"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Security",
@@ -68,7 +68,10 @@ python_version = "3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=src/scori --cov-report=term-missing"
+addopts = "--cov=src/scori --cov-report=term-missing -m 'not integration'"
+markers = [
+  "integration: requires network access; run with -m integration",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scori"]
