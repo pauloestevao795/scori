@@ -4,10 +4,8 @@ Supported formats:
     * requirements.txt
     * pyproject.toml (PEP 621 + PEP 735 dependency-groups)
     * setup.cfg ([options].install_requires)
-
-TODO v0.2: support poetry.lock and uv.lock — required to resolve
-the real transitive tree and populate the ``transitive_affected``
-field of FrictionResult with accurate data instead of the default 0.
+    * Pipfile (TOML — [packages] and [dev-packages])
+    * environment.yml / conda.yml (conda environment files)
 """
 
 from __future__ import annotations
@@ -85,6 +83,83 @@ def _from_setup_cfg(path: Path) -> list[Dependency]:
     return deps
 
 
+def _from_pipfile(path: Path) -> list[Dependency]:
+    data: dict[str, Any] = tomllib.loads(path.read_text(encoding="utf-8"))
+    deps: list[Dependency] = []
+    for section in ("packages", "dev-packages"):
+        for name, spec in (data.get(section) or {}).items():
+            if isinstance(spec, dict):
+                spec = spec.get("version", "*")
+            version_spec = "" if spec == "*" else spec
+            deps.append(Dependency(name=name, version_spec=version_spec, source_file=path.name))
+    return deps
+
+
+# Matches conda dep lines: name[=version] or name[>=version] etc.
+_CONDA_DEP_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9_.\-]+)\s*(?P<spec>(?:[<>!]=?|==?)[^\s#;]*)?"
+)
+
+
+def _parse_conda_dep(entry: str, source: str) -> Dependency | None:
+    entry = entry.split("#", 1)[0].strip()
+    if not entry or ":" in entry:
+        return None
+    m = _CONDA_DEP_RE.match(entry)
+    if not m:
+        return None
+    name = m.group("name")
+    if name.lower() == "python":
+        return None
+    spec = (m.group("spec") or "").strip()
+    # conda uses single = as exact pinning; normalise to ==
+    if spec and re.match(r"^=[^=]", spec):
+        spec = "=" + spec
+    return Dependency(name=name, version_spec=spec, source_file=source)
+
+
+def _from_conda_yml(path: Path) -> list[Dependency]:
+    deps: list[Dependency] = []
+    in_deps = False
+    in_pip = False
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not in_deps:
+            if line.rstrip() == "dependencies:":
+                in_deps = True
+            continue
+
+        if not line.strip():
+            continue
+
+        # Top-level YAML key ends the dependencies block
+        if line[0] != " " and line.strip().endswith(":"):
+            break
+
+        # pip: sub-section marker (e.g. "  - pip:")
+        if re.match(r"^\s+-\s+pip:\s*$", line):
+            in_pip = True
+            continue
+
+        # pip sub-items are more deeply indented than top-level deps
+        if in_pip and re.match(r"^\s{4,}-\s+", line):
+            entry = re.sub(r"^\s+-\s+", "", line).strip()
+            dep = _parse_req_line(entry, path.name)
+            if dep is not None:
+                deps.append(dep)
+            continue
+
+        # Regular conda dep (2-space indent)
+        if re.match(r"^\s{2}-\s+", line):
+            in_pip = False
+            entry = re.sub(r"^\s+-\s+", "", line).strip()
+            dep = _parse_conda_dep(entry, path.name)
+            if dep is not None:
+                deps.append(dep)
+
+    return deps
+
+
 _SKIP_DIRS = frozenset({
     ".venv", "venv", "env", ".env",
     "node_modules", "site-packages", "dist-packages",
@@ -95,7 +170,13 @@ _SKIP_DIRS = frozenset({
 _PARSERS: dict[str, Any] = {
     "pyproject.toml": _from_pyproject,
     "setup.cfg": _from_setup_cfg,
+    "Pipfile": _from_pipfile,
 }
+
+_CONDA_FILENAMES = frozenset({
+    "environment.yml", "environment.yaml",
+    "conda.yml", "conda.yaml",
+})
 
 
 def _req_glob(root: Path) -> list[Path]:
@@ -104,6 +185,16 @@ def _req_glob(root: Path) -> list[Path]:
     for p in root.rglob("requirements*.txt"):
         if not any(part in _SKIP_DIRS for part in p.parts):
             results.append(p)
+    return results
+
+
+def _conda_glob(root: Path) -> list[Path]:
+    """Return all conda environment YAML files under root, excluding venv dirs."""
+    results = []
+    for fname in _CONDA_FILENAMES:
+        for p in root.rglob(fname):
+            if not any(part in _SKIP_DIRS for part in p.parts):
+                results.append(p)
     return results
 
 
@@ -129,11 +220,15 @@ def scan(project_path: str | Path) -> list[Dependency]:
     for req_path in sorted(_req_glob(root)):
         _add(_from_requirements_txt(req_path))
 
-    # pyproject.toml / setup.cfg — recurse, skip venv dirs
+    # pyproject.toml / setup.cfg / Pipfile — recurse, skip venv dirs
     for fname, parser in _PARSERS.items():
         for manifest in sorted(root.rglob(fname)):
             if any(part in _SKIP_DIRS for part in manifest.parts):
                 continue
             _add(parser(manifest))
+
+    # conda environment YAML files
+    for conda_path in sorted(_conda_glob(root)):
+        _add(_from_conda_yml(conda_path))
 
     return deps

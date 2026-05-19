@@ -28,6 +28,8 @@ from rich.table import Table
 from . import __version__
 from ._types import Dependency, FrictionResult
 from .config import ScoriConfig
+from concurrent.futures import ThreadPoolExecutor
+
 from .friction import compute
 from .history import compute_trends, load_history, save_snapshot
 from .lockfile import detect_update_conflicts, load_transitive_counts
@@ -43,15 +45,18 @@ def _compute_all(
     stub_diff: bool = False,
 ) -> list[FrictionResult]:
     transitive = load_transitive_counts(project_root)
-    return [
-        compute(
+
+    def _run(d: Dependency) -> FrictionResult:
+        return compute(
             d,
             transitive_affected=transitive.get(d["name"].lower(), 0),
             project_root=project_root,
             stub_diff=stub_diff,
         )
-        for d in deps
-    ]
+
+    workers = min(16, len(deps)) if deps else 1
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(_run, deps))
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:

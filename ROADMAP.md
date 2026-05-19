@@ -153,14 +153,14 @@ building on the data already computed.
 
 ---
 
-## v1.0 — Stable release
+## v1.0 — Stable release ✅
 
-- [ ] Stable public API guarantee: `FrictionResult`, `Dependency`, `compute()`
+- [x] Stable public API guarantee: `FrictionResult`, `Dependency`, `compute()`
   will not change in backwards-incompatible ways in 1.x releases
-- [ ] `Pipfile` / `Pipfile.lock` manifest support
-- [ ] `conda.yml` environment file support
-- [ ] Integration test suite against well-known real-world projects
-- [ ] Performance: parallel HTTP fetching across dependencies (currently serial)
+- [x] `Pipfile` / `Pipfile.lock` manifest support
+- [x] `conda.yml` / `environment.yml` environment file support
+- [x] Integration test suite against well-known real-world projects (`-m integration`)
+- [x] Performance: parallel HTTP fetching across dependencies via `ThreadPoolExecutor`
 
 ---
 
@@ -168,29 +168,119 @@ building on the data already computed.
 
 The friction score algorithm is language-agnostic. The language-specific parts
 are thin adapters: a manifest parser, a registry client, and a lockfile parser.
-OSV already covers npm, Rust, Go, Ruby, and Maven — so the vulnerability layer
-transfers immediately.
+OSV already covers npm, Rust, Go, Ruby, Maven, NuGet, and Dart — so the
+vulnerability layer transfers immediately to most target ecosystems.
 
-The most valuable ecosystems to target next, ranked by impact:
+The implementation strategy is a **single Python project** with per-ecosystem
+adapter modules, exposed via a `--lang` flag:
 
-| Ecosystem | Manifest | Registry | Vuln DB |
-| --- | --- | --- | --- |
-| **Node.js** | `package.json` + `package-lock.json` | npm registry API | OSV ✓ |
-| **Rust** | `Cargo.toml` + `Cargo.lock` | crates.io API | OSV ✓ / RustSec |
-| **Go** | `go.mod` + `go.sum` | proxy.golang.org | OSV ✓ |
-| **Ruby** | `Gemfile` + `Gemfile.lock` | rubygems.org API | OSV ✓ |
+```shell
+scori friction --lang npm
+scori friction --lang go
+scori friction --lang java
+```
 
-Two approaches are possible:
+This keeps all scoring logic, CLI, cache, and output formats shared. Each
+ecosystem contributes only three modules: a manifest parser, a registry client,
+and a lockfile parser.
 
-- **Separate CLIs** — `scori-js`, `scori-rs`, etc., each a standalone tool in
-  the target language. Simpler to maintain; idiomatic for each ecosystem.
-- **Multi-language core** — one `scori` binary with subcommands per ecosystem
-  (`scori friction --lang npm`). Better UX for polyglot projects; harder to
-  maintain.
+### Ecosystem support matrix
 
-A separate CLI per language is the recommended starting point. The Node.js
-ecosystem (`npm` / `pnpm` / `yarn`) is the highest-value target given its
-size and the frequency of `npm audit`-style security events.
+| Ecosystem | Manifest | Lockfile | Registry | OSV |
+| --- | --- | --- | --- | --- |
+| **Node.js** | `package.json` | `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` | npm registry API | ✓ |
+| **Go** | `go.mod` | `go.sum` | proxy.golang.org | ✓ |
+| **Java** | `pom.xml` / `build.gradle` | `gradle.lockfile` | Maven Central API | ✓ |
+| **Rust** | `Cargo.toml` | `Cargo.lock` | crates.io API | ✓ / RustSec |
+| **Ruby** | `Gemfile` | `Gemfile.lock` | rubygems.org API | ✓ |
+| **C# / .NET** | `*.csproj` / `packages.config` | — | NuGet API | ✓ |
+| **PHP** | `composer.json` | `composer.lock` | Packagist API | partial |
+| **Dart / Flutter** | `pubspec.yaml` | `pubspec.lock` | pub.dev API | ✓ |
+| **Swift** | `Package.swift` | `Package.resolved` | Swift Package Index API | limited |
+| **Elixir** | `mix.exs` | `mix.lock` | Hex.pm API | — |
+| **Lua** | `*.rockspec` | — | LuaRocks API | — |
+
+---
+
+## v1.1 — Node.js ecosystem
+
+The highest-value target: largest package registry in the world, frequent
+security events, and full OSV coverage.
+
+- [ ] Parse `package.json` (dependencies + devDependencies)
+- [ ] Resolve installed versions from `package-lock.json`, `yarn.lock`, and
+  `pnpm-lock.yaml`
+- [ ] Fetch metadata from the npm registry API (version history, publish dates,
+  deprecation flags)
+- [ ] Transitive dep count via lockfile graph
+- [ ] `--lang npm` flag wires all of the above into the existing `scori friction`
+  and `scori monitor` commands
+
+---
+
+## v1.2 — Go and Rust
+
+Both have excellent OSV/RustSec coverage and deterministic lockfiles, making
+the friction signal high-quality from day one.
+
+### Go
+
+- [ ] Parse `go.mod` for direct dependencies
+- [ ] Resolve versions from `go.sum`
+- [ ] Fetch metadata via proxy.golang.org and pkg.go.dev
+- [ ] Transitive count from the module graph
+
+### Rust
+
+- [ ] Parse `Cargo.toml`
+- [ ] Resolve versions from `Cargo.lock`
+- [ ] Fetch metadata from crates.io API
+- [ ] Pull advisory data from RustSec (`rustsec.org/advisories`) in addition to OSV
+
+---
+
+## v1.3 — Java and C# / .NET
+
+Enterprise ecosystems with high update friction in practice — exactly the
+problem scori was built to quantify.
+
+### Java
+
+- [ ] Parse `pom.xml` (Maven) and `build.gradle` / `build.gradle.kts` (Gradle)
+- [ ] Resolve pinned versions from `gradle.lockfile` where present
+- [ ] Fetch metadata from Maven Central Search API
+- [ ] Map OSV advisories for Maven ecosystem
+
+### C# / .NET
+
+- [ ] Parse `*.csproj` and legacy `packages.config`
+- [ ] Fetch metadata from the NuGet V3 API
+- [ ] OSV NuGet ecosystem coverage
+
+---
+
+## v1.4 — Ruby, PHP, and Dart / Flutter
+
+- [ ] **Ruby**: parse `Gemfile`, resolve from `Gemfile.lock`, rubygems.org API
+- [ ] **PHP**: parse `composer.json`, resolve from `composer.lock`, Packagist API;
+  note partial OSV coverage — supplement with the
+  [PHP Security Advisories Database](https://github.com/FriendsOfPHP/security-advisories)
+- [ ] **Dart / Flutter**: parse `pubspec.yaml`, resolve from `pubspec.lock`,
+  pub.dev API, full OSV coverage
+
+---
+
+## v1.5 — Swift, Elixir, and Lua
+
+Lower-priority ecosystems with limited or no OSV coverage; friction score is
+still meaningful via version-jump and maintenance signals even without CVE data.
+
+- [ ] **Swift**: parse `Package.swift`, resolve from `Package.resolved`,
+  Swift Package Index API; CVE data limited to GitHub Advisory Database entries
+- [ ] **Elixir**: parse `mix.exs`, resolve from `mix.lock`, Hex.pm API;
+  no OSV coverage — score based on version-jump and maintenance signals only
+- [ ] **Lua**: parse `*.rockspec`, LuaRocks API; no OSV coverage — score based
+  on version-jump and maintenance signals only
 
 ---
 

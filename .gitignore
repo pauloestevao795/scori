@@ -27,7 +27,19 @@ uv.lock
 
 # scori
 .scori/
+.scori-backup/
 scori-report.html
 make_pdf.py
 scori-marketing.pdf
 requirements.txt
+
+# environment / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+
+# mkdocs site output
+site/

@@ -36,8 +36,11 @@ uv run ruff format --check .
 # Type check
 uv run mypy src/scori/
 
-# Tests
+# Tests (unit, no network)
 uv run pytest
+
+# Integration tests (requires network)
+uv run pytest -m integration
 
 # All at once
 uv run ruff check . && uv run ruff format --check . && uv run mypy src/scori/ && uv run pytest
@@ -51,23 +54,30 @@ All four checks must pass before a pull request can be merged.
 
 ```
 src/scori/
-  __init__.py       version
+  __init__.py       stable public API (compute, scan, Dependency, FrictionResult, …)
   __main__.py       CLI (argparse, rich)
-  _types.py         TypedDicts: Dependency, FrictionResult
+  _types.py         TypedDicts: Dependency, FrictionResult, FrictionLabel, VersionJump
   friction.py       core scoring logic, PyPI/GitHub/OSV fetching
-  scanner.py        manifest parser (requirements.txt, pyproject.toml, setup.cfg)
+  scanner.py        manifest parser (requirements.txt, pyproject.toml, setup.cfg,
+                    Pipfile, environment.yml/conda.yml)
   lockfile.py       uv.lock / poetry.lock parser + conflict detection
   config.py         per-project .scori.toml profiles
+  fix.py            GitHub PR automation for scori fix
+  sbom.py           CycloneDX 1.5 SBOM generation
   history.py        JSONL score history + trend computation
   summarise.py      LLM changelog summary (Ollama → Claude → OpenAI)
   stubdiff.py       .pyi stub diff for API removal detection
 
 tests/
   test_friction.py
+  test_scanner.py
   test_lockfile.py
   test_config.py
   test_history.py
+  test_fix.py
+  test_sbom.py
   test_stubdiff.py
+  test_integration.py   # requires network; run with: pytest -m integration
 ```
 
 ---
@@ -116,10 +126,10 @@ Open a GitHub issue and include:
 
 ## Priority areas for contribution
 
-- Manifest parsers: `conda.yml`, `Pipfile`, `Pipfile.lock`
-- Integration tests against real-world projects
+- Multi-ecosystem adapters: Node.js (`package.json` + npm API), Go (`go.mod`), Rust (`Cargo.toml`)
 - CLI internationalisation (i18n)
 - Conda/pyenv version resolution improvements
+- `Pipfile.lock` parser for accurate transitive counts (analogous to `lockfile.py`)
 
 Issues labelled **`good first issue`** are the recommended starting point.
 

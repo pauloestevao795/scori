@@ -4,8 +4,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 0.7.x   | ✅ Yes    |
-| < 0.7   | ❌ No     |
+| 1.0.x   | ✅ Yes    |
+| < 1.0   | ❌ No     |
 
 ## Reporting a Vulnerability
 
@@ -25,8 +25,8 @@ will be released as soon as possible (target: within 14 days for critical issues
 
 ## Security Considerations
 
-scori reads local manifest files (`requirements.txt`, `pyproject.toml`, `setup.cfg`) and
-makes outbound HTTP requests to public APIs:
+scori reads local manifest files (`requirements.txt`, `pyproject.toml`, `setup.cfg`,
+`Pipfile`, `environment.yml`, `conda.yml`) and makes outbound HTTP requests to public APIs:
 
 | Endpoint | Data sent |
 |----------|-----------|
