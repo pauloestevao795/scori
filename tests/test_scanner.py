@@ -94,3 +94,24 @@ def test_scan_all_no_cross_ecosystem_dedup(tmp_path: Path) -> None:
     deps = scan_all(tmp_path)
     lodash_deps = [d for d in deps if d["name"].lower() == "lodash"]
     assert len(lodash_deps) == 2  # one Python, one npm
+
+
+def test_scan_all_quad_polyglot(tmp_path: Path) -> None:
+    # All four ecosystems in one tree
+    (tmp_path / "requirements.txt").write_text("fastapi>=0.100\n")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "^18.0.0"}})
+    )
+    (tmp_path / "go.mod").write_text(
+        "module example.com/app\n\ngo 1.21\n\n"
+        "require github.com/gin-gonic/gin v1.9.1\n"
+    )
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "app"\nversion = "0.1.0"\n\n'
+        "[dependencies]\nserde = \"1.0\"\n"
+    )
+    deps = scan_all(tmp_path)
+    names = {d["name"] for d in deps}
+    assert {"fastapi", "react", "github.com/gin-gonic/gin", "serde"} <= names
+    sources = {d["source_file"] for d in deps}
+    assert sources == {"requirements.txt", "package.json", "go.mod", "Cargo.toml"}

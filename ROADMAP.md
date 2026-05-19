@@ -218,24 +218,33 @@ security events, and full OSV coverage.
 
 ---
 
-## v1.2 — Go and Rust
+## v1.2 — Go and Rust ✅
 
 Both have excellent OSV/RustSec coverage and deterministic lockfiles, making
 the friction signal high-quality from day one.
 
 ### Go
 
-- [ ] Parse `go.mod` for direct dependencies
-- [ ] Resolve versions from `go.sum`
-- [ ] Fetch metadata via proxy.golang.org and pkg.go.dev
-- [ ] Transitive count from the module graph
+- [x] Parse `go.mod` for direct dependencies (single-line and block `require`)
+- [x] Resolve versions from `go.sum` (highest semver across all files in tree)
+- [x] Fetch metadata from `proxy.golang.org/@latest` with 1-hour local cache
+- [x] Per-version publish timestamp via `proxy.golang.org/@v/{version}.info`
+- [x] Module path encoding per Go proxy protocol (uppercase → `!lower`)
+- [x] Breaking signals via GitHub releases and CHANGELOG for `github.com/` modules
+- [x] CVEs via OSV (`ecosystem: "Go"`)
+- [x] `compute_go()` and `scan_go()` in stable public API
 
 ### Rust
 
-- [ ] Parse `Cargo.toml`
-- [ ] Resolve versions from `Cargo.lock`
-- [ ] Fetch metadata from crates.io API
-- [ ] Pull advisory data from RustSec (`rustsec.org/advisories`) in addition to OSV
+- [x] Parse `Cargo.toml` (`[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`)
+- [x] Skip path/git dependencies (not from crates.io)
+- [x] Resolve versions from `Cargo.lock` (v1/v2/v3); accepts `registry+` and `sparse+`
+- [x] Transitive reverse-dep count from `Cargo.lock` `dependencies` lists
+- [x] Fetch metadata from crates.io API with required `User-Agent` header
+- [x] Per-version `created_at` timestamps for accurate `months_outdated`
+- [x] `yanked` flag from crates.io API
+- [x] CVEs via OSV (`ecosystem: "crates.io"`, covers RustSec advisories)
+- [x] `compute_rust()` and `scan_rust()` in stable public API
 
 ---
 

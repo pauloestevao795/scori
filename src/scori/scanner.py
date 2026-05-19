@@ -235,12 +235,14 @@ def scan(project_path: str | Path) -> list[Dependency]:
 
 
 def scan_all(project_path: str | Path) -> list[Dependency]:
-    """Scan all supported ecosystems (Python + npm) under project_path.
+    """Scan all supported ecosystems (Python + npm + Go + Rust) under project_path.
 
-    Combines Python and npm manifests without cross-ecosystem deduplication —
-    a Python package and an npm package can share a name and are distinct deps.
+    Combines manifests from all ecosystems without cross-ecosystem deduplication —
+    a package name can exist in multiple registries and each is a distinct entry.
     Within each ecosystem, duplicates are still suppressed.
     """
-    from .npm import scan_npm  # lazy import to avoid circular dependency
+    from .npm import scan_npm        # lazy imports to avoid circular deps
+    from .golang import scan_go
+    from .rust import scan_rust
 
-    return scan(project_path) + scan_npm(project_path)
+    return scan(project_path) + scan_npm(project_path) + scan_go(project_path) + scan_rust(project_path)

@@ -4,6 +4,50 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.2.0] - 2026-05-19
+
+### Added
+
+- **Go ecosystem support** (`--lang go` on `scori friction` and `scori monitor`):
+  - `go.mod` parser reads `require` directives (single-line and block forms)
+  - Installed version resolved from `go.sum` (highest matching semver);
+    falls back to the spec string when no `go.sum` is present
+  - Module metadata fetched from `proxy.golang.org/@latest` with 1-hour local
+    cache (`~/.cache/scori/go_{module}.json`)
+  - Per-version publish timestamp lazily fetched from
+    `proxy.golang.org/@v/{version}.info` for accurate `months_outdated`
+  - Breaking signals via GitHub releases and CHANGELOG for modules hosted on
+    `github.com/`
+  - CVEs via the OSV database (`ecosystem: "Go"`)
+  - Module path encoding per the Go proxy protocol (uppercase letters → `!lower`)
+  - `compute_go()` and `scan_go()` exported from the top-level `scori` package
+
+- **Rust ecosystem support** (`--lang rust` on `scori friction` and `scori monitor`):
+  - `Cargo.toml` parser reads `[dependencies]`, `[dev-dependencies]`, and
+    `[build-dependencies]`; skips `path = "..."` and `git = "..."` entries
+    (not from crates.io)
+  - Installed version resolved from `Cargo.lock` (v1/v2/v3); falls back to
+    semver requirement lower-bound
+  - crates.io API client (`https://crates.io/api/v1/crates/{name}`) with the
+    required `User-Agent` header; per-version `created_at` timestamps for
+    accurate `months_outdated`; `yanked` flag mapped to the `yanked` field in
+    `FrictionResult`
+  - Transitive reverse-dependency count from `Cargo.lock` `dependencies` lists
+    (handles both v3 bare-name format and v1/v2 `"name version (url)"` format)
+  - Breaking signals via GitHub releases and CHANGELOG (extracted from the
+    crate's `repository` field)
+  - CVEs via the OSV database (`ecosystem: "crates.io"`, which covers RustSec
+    advisories)
+  - `compute_rust()` and `scan_rust()` exported from the top-level `scori` package
+
+- **Quad-polyglot auto-detection**: `scori friction --path .` and `scan_all()`
+  now discover Python, npm, Go, and Rust manifests in a single pass. The
+  `source_file` field (`go.mod`, `Cargo.toml`) routes each dependency to its
+  correct compute function.
+
+- New `--lang` choices: `go` and `rust` added alongside `auto`, `python`, `npm`
+  on both `scori friction` and `scori monitor`.
+
 ## [1.1.1] - 2026-05-19
 
 ### Added

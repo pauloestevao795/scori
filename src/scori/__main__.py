@@ -59,16 +59,56 @@ def _compute_all(
             )
 
         runner = _run_npm
+    elif lang == "go":
+        from .golang import compute_go, load_transitive_counts_go
+        transitive = load_transitive_counts_go(project_root)
+
+        def _run_go(d: Dependency) -> FrictionResult:
+            return compute_go(
+                d,
+                transitive_affected=transitive.get(d["name"].lower(), 0),
+                project_root=project_root,
+            )
+
+        runner = _run_go
+    elif lang == "rust":
+        from .rust import compute_rust, load_transitive_counts_rust
+        transitive = load_transitive_counts_rust(project_root)
+
+        def _run_rust(d: Dependency) -> FrictionResult:
+            return compute_rust(
+                d,
+                transitive_affected=transitive.get(d["name"].lower(), 0),
+                project_root=project_root,
+            )
+
+        runner = _run_rust
     elif lang == "auto":
         from .npm import compute_npm, load_transitive_counts_npm
+        from .golang import compute_go, load_transitive_counts_go
+        from .rust import compute_rust, load_transitive_counts_rust
         transitive_py = load_transitive_counts(project_root)
         transitive_npm = load_transitive_counts_npm(project_root)
+        transitive_go = load_transitive_counts_go(project_root)
+        transitive_rust = load_transitive_counts_rust(project_root)
 
         def _run_auto(d: Dependency) -> FrictionResult:
             if d["source_file"] == "package.json":
                 return compute_npm(
                     d,
                     transitive_affected=transitive_npm.get(d["name"].lower(), 0),
+                    project_root=project_root,
+                )
+            if d["source_file"] == "go.mod":
+                return compute_go(
+                    d,
+                    transitive_affected=transitive_go.get(d["name"].lower(), 0),
+                    project_root=project_root,
+                )
+            if d["source_file"] == "Cargo.toml":
+                return compute_rust(
+                    d,
+                    transitive_affected=transitive_rust.get(d["name"].lower(), 0),
                     project_root=project_root,
                 )
             return compute(
@@ -250,6 +290,12 @@ def _cmd_friction(args: argparse.Namespace) -> int:
     if lang == "npm":
         from .npm import scan_npm
         raw_deps = scan_npm(args.path)
+    elif lang == "go":
+        from .golang import scan_go
+        raw_deps = scan_go(args.path)
+    elif lang == "rust":
+        from .rust import scan_rust
+        raw_deps = scan_rust(args.path)
     elif lang == "auto":
         from .scanner import scan_all
         raw_deps = scan_all(args.path)
@@ -348,6 +394,12 @@ def _cmd_monitor(args: argparse.Namespace) -> int:
         if lang == "npm":
             from .npm import scan_npm
             raw_deps = scan_npm(args.path)
+        elif lang == "go":
+            from .golang import scan_go
+            raw_deps = scan_go(args.path)
+        elif lang == "rust":
+            from .rust import scan_rust
+            raw_deps = scan_rust(args.path)
         elif lang == "auto":
             from .scanner import scan_all
             raw_deps = scan_all(args.path)
@@ -1014,9 +1066,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_fric.add_argument(
         "--lang",
-        choices=["auto", "python", "npm"],
+        choices=["auto", "python", "npm", "go", "rust"],
         default="auto",
-        help="Dependency ecosystem — auto detects both Python and npm (default: auto)",
+        help="Dependency ecosystem — auto detects all supported ecosystems (default: auto)",
     )
     p_fric.set_defaults(func=_cmd_friction)
 
@@ -1038,9 +1090,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_mon.add_argument(
         "--lang",
-        choices=["auto", "python", "npm"],
+        choices=["auto", "python", "npm", "go", "rust"],
         default="auto",
-        help="Dependency ecosystem — auto detects both Python and npm (default: auto)",
+        help="Dependency ecosystem — auto detects all supported ecosystems (default: auto)",
     )
     p_mon.set_defaults(func=_cmd_monitor)
 

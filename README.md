@@ -10,7 +10,7 @@
 
 Free tools like `pip-audit`, OSV-Scanner, and Dependabot detect vulnerabilities and open update PRs — but none of them answer the question that matters: *is it worth updating this lib right now, or does the migration cost outweigh the risk of not doing it?* `scori` quantifies that friction as a single 0–100 score per dependency, using public data from PyPI, npm, GitHub, and the OSV vulnerability database.
 
-Supports **Python** and **Node.js** projects — including monorepos with both.
+Supports **Python**, **Node.js**, **Go**, and **Rust** projects — including monorepos with any combination.
 
 ## Install
 
@@ -45,6 +45,8 @@ scori friction --path . --stub-diff          # diff .pyi stubs for API removal s
 # Restrict to one ecosystem when needed
 scori friction --path . --lang python
 scori friction --path . --lang npm
+scori friction --path . --lang go
+scori friction --path . --lang rust
 ```
 
 ### Monitor, update, and fix
@@ -90,20 +92,24 @@ scori scan --path .
 | --- | --- | --- |
 | **Python** | `requirements*.txt`, `pyproject.toml`, `setup.cfg`, `Pipfile`, `environment.yml`, `conda.yml` | `uv.lock`, `poetry.lock` |
 | **Node.js** | `package.json` | `package-lock.json` (v1/v2/v3), `yarn.lock`, `pnpm-lock.yaml` |
+| **Go** | `go.mod` | `go.sum` |
+| **Rust** | `Cargo.toml` | `Cargo.lock` (v1/v2/v3) |
 
 ### Polyglot monorepos
 
-Running `scori friction --path .` from a root that contains both a Python backend and a Node.js frontend scores everything in one table — no flags needed:
+Running `scori friction --path .` from a project root scores all supported ecosystems in one table — no flags needed:
 
 ```text
 my-project/
-  back/   ← pyproject.toml, uv.lock
-  front/  ← package.json, package-lock.json
+  back/     ← pyproject.toml, uv.lock
+  front/    ← package.json, package-lock.json
+  service/  ← go.mod, go.sum
+  agent/    ← Cargo.toml, Cargo.lock
 ```
 
 ```bash
 cd my-project
-scori friction --path .   # Python + npm deps, single table
+scori friction --path .   # Python + npm + Go + Rust deps, single table
 ```
 
 ### Example output
@@ -162,7 +168,7 @@ Labels:
 
 CVE data is fetched from the [OSV database](https://osv.dev) (free, no auth required). CRITICAL-severity CVEs count double, so the most dangerous vulnerabilities push higher in the queue. CVEs that remain in the latest version do not affect the score.
 
-Transitive dependency counts are read from `uv.lock`, `poetry.lock`, or `package-lock.json`.
+Transitive dependency counts are read from `uv.lock`, `poetry.lock`, `package-lock.json`, or `Cargo.lock`.
 
 ### Data sources
 
@@ -170,9 +176,12 @@ Transitive dependency counts are read from `uv.lock`, `poetry.lock`, or `package
 | --- | --- |
 | `https://pypi.org/pypi/{pkg}/json` | Latest version, release dates, yanked status |
 | `https://registry.npmjs.org/{pkg}` | Latest version, publish dates, deprecated status |
+| `https://proxy.golang.org/{module}/@latest` | Latest Go module version and publish time |
+| `https://proxy.golang.org/{module}/@v/{version}.info` | Per-version publish timestamp for Go |
+| `https://crates.io/api/v1/crates/{name}` | Latest version, publish dates, yanked status for Rust |
 | `https://api.github.com/repos/{owner}/{repo}/releases` | Release notes for breaking signal detection |
 | `https://raw.githubusercontent.com/…/CHANGELOG.md` | CHANGELOG for additional breaking signal scanning |
-| `https://api.osv.dev/v1/query` | Known CVEs per version with severity (PyPI + npm + more) |
+| `https://api.osv.dev/v1/query` | Known CVEs per version with severity (PyPI + npm + Go + crates.io + more) |
 
 Set `GITHUB_TOKEN` to raise the GitHub API rate limit from 60/h to 5000/h. Registry and GitHub data is cached in `~/.cache/scori/` for 1 hour. OSV results are cached in memory per run.
 
@@ -186,21 +195,23 @@ Set `GITHUB_TOKEN` to raise the GitHub API rate limit from 60/h to 5000/h. Regis
 
 ## Python API
 
-Stable public API from version 1.0 — `FrictionResult`, `Dependency`, `compute()`, `scan()`, `scan_all()`, `compute_npm()`, and `scan_npm()` will not change in backwards-incompatible ways in 1.x releases.
+Stable public API from version 1.0 — `FrictionResult`, `Dependency`, `compute()`, `scan()`, `scan_all()`, `compute_npm()`, `scan_npm()`, `compute_go()`, `scan_go()`, `compute_rust()`, and `scan_rust()` will not change in backwards-incompatible ways in 1.x releases.
 
 ```python
 from scori import (
-    compute, compute_npm,
-    scan, scan_npm, scan_all,
+    compute, compute_npm, compute_go, compute_rust,
+    scan, scan_npm, scan_go, scan_rust, scan_all,
     Dependency, FrictionResult,
 )
 
-# Polyglot scan — Python + npm in one call
+# Polyglot scan — Python + npm + Go + Rust in one call
 deps = scan_all("/path/to/project")
 
-# Python-only or npm-only
-py_deps  = scan("/path/to/project")
-npm_deps = scan_npm("/path/to/project")
+# Per-ecosystem scans
+py_deps   = scan("/path/to/project")
+npm_deps  = scan_npm("/path/to/project")
+go_deps   = scan_go("/path/to/project")
+rust_deps = scan_rust("/path/to/project")
 
 # Score a Python dependency
 result: FrictionResult = compute(Dependency(
@@ -216,6 +227,20 @@ result = compute_npm(Dependency(
     source_file="package.json",
 ))
 
+# Score a Go module
+result = compute_go(Dependency(
+    name="github.com/gin-gonic/gin",
+    version_spec="v1.8.0",
+    source_file="go.mod",
+))
+
+# Score a Rust crate
+result = compute_rust(Dependency(
+    name="serde",
+    version_spec="1.0",
+    source_file="Cargo.toml",
+))
+
 print(result["score"])           # e.g. 12
 print(result["label"])           # "Low"
 print(result["version_jump"])    # "patch"
@@ -229,7 +254,7 @@ print(result["recommendation"])
 ## GitHub Actions
 
 ```yaml
-- uses: pauloestevao795/scori@v1.1.1
+- uses: pauloestevao795/scori@v1.2.0
   with:
     threshold: '75'       # fail if any dep score exceeds this (default: 75)
     comment-pr: 'true'    # post friction table as a PR comment
@@ -256,7 +281,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: pauloestevao795/scori@v1.1.1
+      - uses: pauloestevao795/scori@v1.2.0
         with:
           threshold: '75'
           comment-pr: 'true'
@@ -269,7 +294,7 @@ jobs:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/pauloestevao795/scori
-    rev: v1.1.1
+    rev: v1.2.0
     hooks:
       - id: scori-friction
         args: [--threshold, '75']  # optional: override default threshold
@@ -298,7 +323,7 @@ packages = ["boto3", "some-internal-lib"]  # skip these deps (applies to all eco
 
 - **v1.0 ✅** — stable API, `Pipfile`/`conda.yml` support, parallel HTTP fetch, integration tests
 - **v1.1 ✅** — Node.js ecosystem (`package.json`, npm registry, OSV, all lockfile formats, polyglot auto-detection)
-- **v1.2** — Go and Rust ecosystems
+- **v1.2 ✅** — Go (`go.mod`/`go.sum`, proxy.golang.org) and Rust (`Cargo.toml`/`Cargo.lock`, crates.io) ecosystems
 - **v1.3** — Java and C# / .NET ecosystems
 
 See [ROADMAP.md](ROADMAP.md) for the full multi-ecosystem plan.
