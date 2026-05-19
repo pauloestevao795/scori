@@ -29,6 +29,7 @@ from . import __version__
 from ._types import Dependency, FrictionResult
 from .config import ScoriConfig
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
 
 from .friction import compute
 from .history import compute_trends, load_history, save_snapshot
@@ -43,20 +44,37 @@ def _compute_all(
     deps: list[Dependency],
     project_root: Path,
     stub_diff: bool = False,
+    lang: str = "python",
 ) -> list[FrictionResult]:
-    transitive = load_transitive_counts(project_root)
+    runner: Callable[[Dependency], FrictionResult]
+    if lang == "npm":
+        from .npm import compute_npm, load_transitive_counts_npm
+        transitive = load_transitive_counts_npm(project_root)
 
-    def _run(d: Dependency) -> FrictionResult:
-        return compute(
-            d,
-            transitive_affected=transitive.get(d["name"].lower(), 0),
-            project_root=project_root,
-            stub_diff=stub_diff,
-        )
+        def _run_npm(d: Dependency) -> FrictionResult:
+            return compute_npm(
+                d,
+                transitive_affected=transitive.get(d["name"].lower(), 0),
+                project_root=project_root,
+            )
+
+        runner = _run_npm
+    else:
+        transitive = load_transitive_counts(project_root)
+
+        def _run_py(d: Dependency) -> FrictionResult:
+            return compute(
+                d,
+                transitive_affected=transitive.get(d["name"].lower(), 0),
+                project_root=project_root,
+                stub_diff=stub_diff,
+            )
+
+        runner = _run_py
 
     workers = min(16, len(deps)) if deps else 1
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(_run, deps))
+        return list(pool.map(runner, deps))
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
@@ -207,11 +225,16 @@ def _summarise_result(r: FrictionResult) -> str:
 def _cmd_friction(args: argparse.Namespace) -> int:
     cfg = ScoriConfig.load(Path(args.path))
     threshold = args.threshold if args.threshold != 75 else cfg.threshold
+    lang: str = getattr(args, "lang", "python")
 
-    deps = scan(args.path)
-    deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
+    if lang == "npm":
+        from .npm import scan_npm
+        raw_deps = scan_npm(args.path)
+    else:
+        raw_deps = scan(args.path)
+    deps = [d for d in raw_deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
-    results = _compute_all(deps, project_root, stub_diff=args.stub_diff)
+    results = _compute_all(deps, project_root, stub_diff=args.stub_diff, lang=lang)
 
     save_snapshot(project_root, results)
 
@@ -292,16 +315,21 @@ def _format_monitor_table(results: list[FrictionResult]) -> None:
 
 def _cmd_monitor(args: argparse.Namespace) -> int:
     cfg = ScoriConfig.load(Path(args.path))
+    lang: str = getattr(args, "lang", "python")
     first = True
     while True:
         if not first:
             console.clear()
         first = False
 
-        deps = scan(args.path)
-        deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
+        if lang == "npm":
+            from .npm import scan_npm
+            raw_deps = scan_npm(args.path)
+        else:
+            raw_deps = scan(args.path)
+        deps = [d for d in raw_deps if d["name"].lower() not in cfg.ignore]
         project_root = Path(args.path)
-        all_results = _compute_all(deps, project_root)
+        all_results = _compute_all(deps, project_root, lang=lang)
 
         updates = [
             r
@@ -958,6 +986,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Download wheels and diff .pyi stubs for API removal signals (slow)",
     )
+    p_fric.add_argument(
+        "--lang",
+        choices=["python", "npm"],
+        default="python",
+        help="Dependency ecosystem (default: python)",
+    )
     p_fric.set_defaults(func=_cmd_friction)
 
     p_mon = sub.add_parser(
@@ -975,6 +1009,12 @@ def main(argv: list[str] | None = None) -> int:
         default=300,
         metavar="SECONDS",
         help="Polling interval in seconds when --watch is active (default: 300)",
+    )
+    p_mon.add_argument(
+        "--lang",
+        choices=["python", "npm"],
+        default="python",
+        help="Dependency ecosystem (default: python)",
     )
     p_mon.set_defaults(func=_cmd_monitor)
 

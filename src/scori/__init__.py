@@ -15,7 +15,7 @@ from .friction import compute
 from .scanner import scan
 from ._types import Dependency, FrictionLabel, FrictionResult, VersionJump
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "__version__",
     "compute",

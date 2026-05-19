@@ -113,7 +113,7 @@ def test_fetch_osv_count_api_error() -> None:
 
 def test_fetch_osv_count_uses_cache() -> None:
     _osv_cache.clear()
-    _osv_cache[("requests", "2.32.0")] = (3, 3, [])
+    _osv_cache[("requests", "2.32.0", "PyPI")] = (3, 3, [])
     assert _fetch_osv_count("requests", "2.32.0") == 3
 
 

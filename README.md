@@ -68,6 +68,15 @@ scori scan --path .
 
 Supported manifest formats: `requirements*.txt`, `pyproject.toml`, `setup.cfg`, `Pipfile`, `environment.yml` / `conda.yml`.
 
+```bash
+# Node.js / npm projects — pass --lang npm
+scori friction --path . --lang npm
+scori monitor  --path . --lang npm
+```
+
+For npm projects, scori reads `package.json` and resolves installed versions
+from `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`.
+
 Example output (`scori friction --format table`, with color indicators):
 
 ```text
@@ -251,7 +260,7 @@ packages = ["boto3", "some-internal-lib"]  # skip these deps entirely
 ## Roadmap
 
 - **v1.0 ✅** — stable API guarantee, `Pipfile`/`conda.yml` support, parallel HTTP fetch, integration tests
-- **v1.1** — Node.js ecosystem (`package.json` + npm registry + OSV)
+- **v1.1 ✅** — Node.js ecosystem (`--lang npm`; `package.json`, npm registry, OSV, lockfiles)
 - **v1.2** — Go and Rust ecosystems
 - **v1.3** — Java and C# / .NET ecosystems
 

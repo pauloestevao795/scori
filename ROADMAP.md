@@ -202,19 +202,19 @@ and a lockfile parser.
 
 ---
 
-## v1.1 — Node.js ecosystem
+## v1.1 — Node.js ecosystem ✅
 
 The highest-value target: largest package registry in the world, frequent
 security events, and full OSV coverage.
 
-- [ ] Parse `package.json` (dependencies + devDependencies)
-- [ ] Resolve installed versions from `package-lock.json`, `yarn.lock`, and
-  `pnpm-lock.yaml`
-- [ ] Fetch metadata from the npm registry API (version history, publish dates,
-  deprecation flags)
-- [ ] Transitive dep count via lockfile graph
-- [ ] `--lang npm` flag wires all of the above into the existing `scori friction`
-  and `scori monitor` commands
+- [x] Parse `package.json` (dependencies + devDependencies)
+- [x] Resolve installed versions from `package-lock.json` (v1/v2/v3),
+  `yarn.lock` (classic + berry), and `pnpm-lock.yaml` (v6/v8/v9)
+- [x] Fetch metadata from the npm registry API (version history, publish dates,
+  deprecation flags); trimmed payload cached at `~/.cache/scori/npm_{pkg}.json`
+- [x] Transitive dep count via `package-lock.json` reverse-dep graph
+- [x] `--lang npm` flag wires all of the above into `scori friction` and
+  `scori monitor`; `deprecated` maps to the `yanked` field in `FrictionResult`
 
 ---
 

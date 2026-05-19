@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.1.0] - 2026-05-19
+
+### Added
+
+- **Node.js / npm ecosystem support** (`--lang npm` on `scori friction` and
+  `scori monitor`):
+  - `package.json` parser reads `dependencies` and `devDependencies`
+  - Installed version resolved from `package-lock.json` (v1/v2/v3),
+    `yarn.lock` (classic and berry), `pnpm-lock.yaml` (v6/v8/v9), or
+    `node_modules/{name}/package.json`; falls back to the semver range
+    lower bound when no lockfile is present
+  - npm registry client (`https://registry.npmjs.org/{pkg}`) with 1-hour
+    local cache (stored as `~/.cache/scori/npm_{pkg}.json`)
+  - Transitive reverse-dependency count from `package-lock.json`
+  - `deprecated` flag mapped to the `yanked` field in `FrictionResult`
+  - CVEs via the OSV database (`ecosystem: "npm"`)
+  - Breaking signals via GitHub releases + CHANGELOG (reuses the same
+    detection logic as the Python adapter)
+- `scori.npm` module exported as part of the stable public API:
+  `scan_npm`, `compute_npm`, `load_transitive_counts_npm`
+- `_fetch_osv` now accepts an `ecosystem` parameter (default `"PyPI"`),
+  enabling reuse across all future ecosystem adapters
+
 ## [1.0.0] - 2026-05-19
 
 ### Added

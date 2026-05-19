@@ -125,7 +125,7 @@ def _pyenv_version(package: str, project_root: Path) -> str | None:
 
 # In-memory OSV cache: (total_count, weighted_count, cwe_ids).
 # weighted_count gives CRITICAL-severity vulnerabilities double weight.
-_osv_cache: dict[tuple[str, str], tuple[int, int, list[str]]] = {}
+_osv_cache: dict[tuple[str, str, str], tuple[int, int, list[str]]] = {}
 
 # Mapping of CWE ID → OWASP Top 10 2021 category code.
 _CWE_TO_OWASP: dict[str, str] = {
@@ -173,14 +173,17 @@ def _vuln_cwe_ids(vulns: list[dict[str, Any]]) -> list[str]:
     return result
 
 
-def _fetch_osv(package: str, version: str) -> tuple[int, int, list[str]]:
+def _fetch_osv(
+    package: str, version: str, ecosystem: str = "PyPI"
+) -> tuple[int, int, list[str]]:
     """Return (total_count, weighted_count, cwe_ids) via the OSV API.
 
     weighted_count: CRITICAL-severity vulnerabilities count double so the
     friction score responds more strongly to high-severity findings.
     cwe_ids: unique CWE weakness identifiers across all returned vulns.
+    ecosystem: OSV ecosystem name (e.g. "PyPI", "npm", "Go", "Maven").
     """
-    key = (package.lower(), version)
+    key = (package.lower(), version, ecosystem)
     if key in _osv_cache:
         return _osv_cache[key]
     try:
@@ -188,7 +191,7 @@ def _fetch_osv(package: str, version: str) -> tuple[int, int, list[str]]:
             "https://api.osv.dev/v1/query",
             json={
                 "version": version,
-                "package": {"name": package, "ecosystem": "PyPI"},
+                "package": {"name": package, "ecosystem": ecosystem},
             },
             timeout=10,
         )
