@@ -375,7 +375,11 @@ def _gather(package: str) -> dict[str, Any]:
     cached = _cache_read(package)
     if cached is not None:
         return cached
-    pypi = _fetch_pypi(package)
+    try:
+        pypi = _fetch_pypi(package)
+    except requests.RequestException:
+        # Registry unreachable — return empty payload; not cached so next run retries
+        return {"pypi": {}, "releases": [], "changelog": "", "_unavailable": True}
     owner_repo = _extract_owner_repo(pypi)
     releases: list[dict[str, Any]] = []
     changelog = ""
@@ -548,6 +552,27 @@ def compute(
 ) -> FrictionResult:
     """Compute the FrictionResult for a dependency."""
     data = _gather(dep["name"])
+
+    if data.get("_unavailable"):
+        current = _current_version_from_spec(dep["version_spec"], dep["name"], project_root)
+        return FrictionResult(
+            name=dep["name"],
+            current_version=current,
+            latest_version=current,
+            score=0,
+            label="Low",
+            version_jump="unknown",
+            breaking_signals=[],
+            transitive_affected=transitive_affected,
+            months_outdated=0.0,
+            yanked=False,
+            recommendation="Registry unavailable — retry when network is restored",
+            cve_current=-1,
+            cve_latest=-1,
+            cwe_ids=[],
+            alternatives=[],
+        )
+
     pypi: dict[str, Any] = data["pypi"]
     releases: list[dict[str, Any]] = data["releases"]
     changelog: str = data.get("changelog") or ""

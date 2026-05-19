@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.2.1] - 2026-05-19
+
+### Fixed
+
+- **Network timeout no longer crashes scori**: `_gather` (PyPI) and `_fetch_npm`
+  (npm registry) now catch `requests.RequestException` (timeouts, connection
+  errors) instead of letting exceptions propagate through `ThreadPoolExecutor`
+  and crash the process. Packages whose registry was unreachable are returned
+  with `score=0` and `recommendation="Registry unavailable — retry when network
+  is restored"`; they do not appear as updates in `scori monitor`.
+  The failed result is not cached, so the next run retries automatically.
+
 ## [1.2.0] - 2026-05-19
 
 ### Added

@@ -226,9 +226,12 @@ def _fetch_npm(package: str) -> dict[str, Any]:
         return cached
 
     url = f"https://registry.npmjs.org/{package}"
-    r = requests.get(url, timeout=10)
-    r.raise_for_status()
-    data = cast(dict[str, Any], r.json())
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        data = cast(dict[str, Any], r.json())
+    except (requests.RequestException, ValueError):
+        return {"npm": {}, "releases": [], "changelog": "", "_unavailable": True}
 
     # Extract GitHub repo URL from repository field
     repo_raw = data.get("repository") or {}
@@ -306,6 +309,27 @@ def compute_npm(
 ) -> FrictionResult:
     """Compute FrictionResult for an npm dependency."""
     data = _fetch_npm(dep["name"])
+
+    if data.get("_unavailable"):
+        current = _resolve_version_npm(dep["name"], dep["version_spec"], project_root)
+        return FrictionResult(
+            name=dep["name"],
+            current_version=current,
+            latest_version=current,
+            score=0,
+            label="Low",
+            version_jump="unknown",
+            breaking_signals=[],
+            transitive_affected=transitive_affected,
+            months_outdated=0.0,
+            yanked=False,
+            recommendation="Registry unavailable — retry when network is restored",
+            cve_current=-1,
+            cve_latest=-1,
+            cwe_ids=[],
+            alternatives=[],
+        )
+
     npm: dict[str, Any] = data["npm"]
     releases: list[dict[str, Any]] = data["releases"]
     changelog: str = data.get("changelog") or ""
