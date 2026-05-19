@@ -338,7 +338,10 @@ def compute_npm(
     latest = str(dist_tags.get("latest") or "0.0.0")
     current = _resolve_version_npm(dep["name"], dep["version_spec"], project_root)
 
-    jump, jump_pts = _version_jump(current, latest)
+    if current == "0.0.0":
+        jump, jump_pts = "unknown", 0
+    else:
+        jump, jump_pts = _version_jump(current, latest)
     signals = _scan_breaking(releases, current, latest, changelog)
     signal_pts = min(20, 4 * len(signals))
     transitive_pts = min(15, 3 * transitive_affected)

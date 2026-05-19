@@ -580,7 +580,13 @@ def compute(
     latest = (pypi.get("info") or {}).get("version") or "0.0.0"
     current = _current_version_from_spec(dep["version_spec"], dep["name"], project_root)
 
-    jump, jump_pts = _version_jump(current, latest)
+    # Skip version-jump scoring when installed version is unknown — comparing
+    # "0.0.0" against any real version always produces a major jump and inflates
+    # the score even though the project may already be on a recent release.
+    if current == "0.0.0":
+        jump, jump_pts = "unknown", 0
+    else:
+        jump, jump_pts = _version_jump(current, latest)
     signals = _scan_breaking(releases, current, latest, changelog)
     if stub_diff:
         from .stubdiff import stub_signals

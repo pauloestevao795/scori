@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.2.2] - 2026-05-19
+
+### Fixed
+
+- **Version-jump score no longer inflated for packages with unknown installed
+  version**: when the installed version resolves to `0.0.0` (no lockfile, venv,
+  or pinned spec found), scori previously computed `_version_jump("0.0.0",
+  "X.Y.Z")` which always returns `major` (+50 pts) — making every unresolved
+  package appear as Medium/High/Critical. Now, when `current == "0.0.0"`, the
+  jump component is skipped (`jump="unknown"`, `jump_pts=0`). Other signals
+  (breaking keywords, CVEs, months outdated) still contribute if available.
+  Fix applied to all four adapters: Python, npm, Go, and Rust.
+
 ## [1.2.1] - 2026-05-19
 
 ### Fixed
