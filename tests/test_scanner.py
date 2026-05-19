@@ -1,6 +1,7 @@
+import json
 from pathlib import Path
 
-from scori.scanner import scan
+from scori.scanner import scan, scan_all
 
 
 def test_scan_pipfile(tmp_path: Path) -> None:
@@ -59,3 +60,37 @@ def test_scan_setup_cfg(tmp_path: Path) -> None:
     deps = scan(tmp_path)
     names = {d["name"] for d in deps}
     assert {"flask", "sqlalchemy"} <= names
+
+
+def test_scan_all_polyglot_project(tmp_path: Path) -> None:
+    # Python backend
+    back = tmp_path / "back"
+    back.mkdir()
+    (back / "requirements.txt").write_text("fastapi>=0.100\n")
+
+    # Node frontend
+    front = tmp_path / "front"
+    front.mkdir()
+    (front / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "^18.0.0", "vite": "^5.0.0"}})
+    )
+
+    deps = scan_all(tmp_path)
+    names = {d["name"] for d in deps}
+    assert {"fastapi", "react", "vite"} <= names
+
+
+def test_scan_all_python_only_unchanged(tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text("requests>=2.31\n")
+    assert scan_all(tmp_path) == scan(tmp_path)
+
+
+def test_scan_all_no_cross_ecosystem_dedup(tmp_path: Path) -> None:
+    # 'lodash' exists as both a Python package (rare but possible) and npm package
+    (tmp_path / "requirements.txt").write_text("lodash==1.0\n")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"lodash": "^4.17.21"}})
+    )
+    deps = scan_all(tmp_path)
+    lodash_deps = [d for d in deps if d["name"].lower() == "lodash"]
+    assert len(lodash_deps) == 2  # one Python, one npm

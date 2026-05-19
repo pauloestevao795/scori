@@ -12,14 +12,18 @@ Stable public API (guaranteed not to change in 1.x releases):
 """
 
 from .friction import compute
-from .scanner import scan
+from .npm import compute_npm, scan_npm
+from .scanner import scan, scan_all
 from ._types import Dependency, FrictionLabel, FrictionResult, VersionJump
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __all__ = [
     "__version__",
     "compute",
+    "compute_npm",
     "scan",
+    "scan_all",
+    "scan_npm",
     "Dependency",
     "FrictionLabel",
     "FrictionResult",

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.1.1] - 2026-05-19
+
+### Added
+
+- **Polyglot auto-detection** (`--lang auto`, now the default): running
+  `scori friction --path .` or `scori monitor --path .` from a project root
+  that contains both Python and Node.js code now scores all dependencies in a
+  single table — no `--lang` flag required. Pure Python and pure npm projects
+  are unaffected (auto silently finds zero deps of the other type).
+- `scan_all()` public API function: combines `scan()` and `scan_npm()` without
+  cross-ecosystem deduplication (a Python and an npm package may share a name
+  and are treated as distinct entries).
+- `scan_npm` and `compute_npm` exported from the top-level `scori` package.
+
 ## [1.1.0] - 2026-05-19
 
 ### Added

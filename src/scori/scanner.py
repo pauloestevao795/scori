@@ -232,3 +232,15 @@ def scan(project_path: str | Path) -> list[Dependency]:
         _add(_from_conda_yml(conda_path))
 
     return deps
+
+
+def scan_all(project_path: str | Path) -> list[Dependency]:
+    """Scan all supported ecosystems (Python + npm) under project_path.
+
+    Combines Python and npm manifests without cross-ecosystem deduplication —
+    a Python package and an npm package can share a name and are distinct deps.
+    Within each ecosystem, duplicates are still suppressed.
+    """
+    from .npm import scan_npm  # lazy import to avoid circular dependency
+
+    return scan(project_path) + scan_npm(project_path)
