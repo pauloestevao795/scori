@@ -25,7 +25,7 @@ from .rust import compute_rust, scan_rust
 from .scanner import scan, scan_all
 from ._types import Dependency, FrictionLabel, FrictionResult, VersionJump
 
-__version__ = "1.2.2"
+__version__ = "1.2.3"
 __all__ = [
     "__version__",
     "compute",

@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.2.3] - 2026-06-03
+
+### Fixed
+
+- **`scori fix` and `scori update` now correctly match packages whose names
+  contain hyphens, underscores, or dots** (e.g. `python-dotenv`, `pytest-cov`,
+  `zope.interface`): the regex used to locate and rewrite manifest lines was
+  broken for these names because `re.escape` escaped the separator *before* the
+  character-class substitution, producing a malformed pattern (`python\\[-_.]dotenv`
+  instead of `python[-_.]dotenv`). Those packages silently failed to update —
+  their lines were left unchanged while all-alpha packages were updated normally.
+  Fixed by splitting on `[-_.]` and joining the escaped parts with the character
+  class, the same normalisation strategy used by PyPI.
+- **Manifest files are now read and written exactly once per file** (previously
+  each package triggered a separate read→write cycle on the same file). The new
+  approach groups all pending updates by target file, applies them in a single
+  in-memory pass, and writes back once. A byte-length safety check now guards
+  every write: if the updated content is shorter than the original the write is
+  aborted and an error is reported, preventing any accidental truncation.
+
 ## [1.2.2] - 2026-05-19
 
 ### Fixed

@@ -58,8 +58,11 @@ src/scori/
   __main__.py       CLI (argparse, rich)
   _types.py         TypedDicts: Dependency, FrictionResult, FrictionLabel, VersionJump
   friction.py       core scoring logic, PyPI/GitHub/OSV fetching
+  npm.py            Node.js/npm ecosystem adapter (package.json + npm registry)
+  golang.py         Go ecosystem adapter (go.mod + proxy.golang.org)
+  rust.py           Rust/crates.io ecosystem adapter (Cargo.toml + crates.io API)
   scanner.py        manifest parser (requirements.txt, pyproject.toml, setup.cfg,
-                    Pipfile, environment.yml/conda.yml)
+                    Pipfile, environment.yml/conda.yml) + scan_all()
   lockfile.py       uv.lock / poetry.lock parser + conflict detection
   config.py         per-project .scori.toml profiles
   fix.py            GitHub PR automation for scori fix
@@ -71,6 +74,9 @@ src/scori/
 tests/
   test_friction.py
   test_scanner.py
+  test_npm.py
+  test_golang.py
+  test_rust.py
   test_lockfile.py
   test_config.py
   test_history.py
@@ -113,6 +119,32 @@ tests/
 
 ---
 
+## Publishing a release
+
+> **Maintainers only.** Do this from a clean `main` branch.
+
+1. Bump the version in two places:
+   - `pyproject.toml` → `version = "X.Y.Z"`
+   - `src/scori/__init__.py` → `__version__ = "X.Y.Z"`
+2. Add the release entry to `CHANGELOG.md`.
+3. Commit:
+
+   ```bash
+   git commit -m "feat: release vX.Y.Z"
+   ```
+
+4. Tag and push **the tag** (not just the branch):
+
+   ```bash
+   git tag vX.Y.Z
+   git push origin main vX.Y.Z
+   ```
+5. The `publish.yml` GitHub Actions workflow triggers on the tag push and uploads to PyPI automatically via **Trusted Publishing** (OIDC — no API token needed).
+
+> **Never run `uv publish --token <token>` or `twine upload` from the CLI.** This project uses PyPI Trusted Publishing. Uploading with a personal API token bypasses the OIDC flow and triggers a security warning from PyPI. If you see that warning, it means a manual upload was performed — delete the API token at pypi.org/manage/account/publishing/ and use the tag-push workflow going forward.
+
+---
+
 ## Reporting bugs
 
 Open a GitHub issue and include:
@@ -126,10 +158,10 @@ Open a GitHub issue and include:
 
 ## Priority areas for contribution
 
-- Multi-ecosystem adapters: Node.js (`package.json` + npm API), Go (`go.mod`), Rust (`Cargo.toml`)
 - CLI internationalisation (i18n)
 - Conda/pyenv version resolution improvements
 - `Pipfile.lock` parser for accurate transitive counts (analogous to `lockfile.py`)
+- Reverse-dependency counts for Go modules (go.sum does not encode them; a module graph walk would be needed)
 
 Issues labelled **`good first issue`** are the recommended starting point.
 

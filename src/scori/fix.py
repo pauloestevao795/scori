@@ -56,7 +56,7 @@ def detect_github_remote(project_root: Path) -> tuple[str, str] | None:
 
 def _update_line(line: str, package: str, new_version: str) -> str | None:
     """Rewrite one manifest line to pin package at new_version, or return None."""
-    pkg_pat = re.sub(r"[-_.]", r"[-_.]", re.escape(package))
+    pkg_pat = r"[-_.]".join(re.escape(part) for part in re.split(r"[-_.]", package))
     m = re.match(
         r'^(\s*["\']?)(' + pkg_pat + r")(\[.*?\])?(\s*)"
         r'(==|>=|~=|!=|<=|>|<)([^\s,;"\'\\]+)',
@@ -75,21 +75,33 @@ def _apply_updates(
     updates: list[tuple[str, str, str, str]],
 ) -> int:
     """Write version bumps to manifest files. Returns number of lines changed."""
-    applied = 0
+    # Group by file so each manifest is read and written exactly once.
+    by_file: dict[str, list[tuple[str, str]]] = {}
     for name, _current, latest, source_file in updates:
-        if not source_file:
-            continue
+        if source_file:
+            by_file.setdefault(source_file, []).append((name, latest))
+
+    applied = 0
+    for source_file, pkg_updates in by_file.items():
         manifest = project_root / source_file
         if not manifest.exists():
             continue
-        lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
-        for i, line in enumerate(lines):
-            new_line = _update_line(line, name, latest)
-            if new_line is not None:
-                lines[i] = new_line
-                applied += 1
-                break
-        manifest.write_text("".join(lines), encoding="utf-8")
+        original = manifest.read_text(encoding="utf-8")
+        lines = original.splitlines(keepends=True)
+        for name, latest in pkg_updates:
+            for i, line in enumerate(lines):
+                new_line = _update_line(line, name, latest)
+                if new_line is not None:
+                    lines[i] = new_line
+                    applied += 1
+                    break
+        updated = "".join(lines)
+        if len(updated) < len(original):
+            raise RuntimeError(
+                f"Safety check: {manifest.name} would shrink "
+                f"({len(original)} → {len(updated)} bytes). Aborting write."
+            )
+        manifest.write_text(updated, encoding="utf-8")
     return applied
 
 

@@ -628,7 +628,7 @@ def _update_line(line: str, package: str, new_version: str) -> str | None:
     Returns the rewritten line, or None if the package is not on this line.
     Handles requirements.txt, pyproject.toml, and setup.cfg formats.
     """
-    pkg_pat = re.sub(r"[-_.]", r"[-_.]", re.escape(package))
+    pkg_pat = r"[-_.]".join(re.escape(part) for part in re.split(r"[-_.]", package))
     m = re.match(
         r'^(\s*["\']?)(' + pkg_pat + r")(\[.*?\])?(\s*)"
         r'(==|>=|~=|!=|<=|>|<)([^\s,;"\'\\]+)',
@@ -748,22 +748,35 @@ def _cmd_update(args: argparse.Namespace) -> int:
     backup_dir = _backup_manifests(project_root, source_files)
     console.print(f"[dim]Backup saved to {backup_dir}[/]")
 
-    applied = 0
+    # Group by file so each manifest is read and written exactly once.
+    by_file: dict[str, list[tuple[str, str]]] = {}
     for r in to_update:
         sf = dep_map.get(r["name"].lower())
-        if not sf:
-            continue
+        if sf:
+            by_file.setdefault(sf, []).append((r["name"], r["latest_version"]))
+
+    applied = 0
+    for sf, pkg_updates in by_file.items():
         manifest = _safe_manifest_path(project_root, sf)
         if manifest is None or not manifest.exists():
             continue
-        lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
-        for i, line in enumerate(lines):
-            new_line = _update_line(line, r["name"], r["latest_version"])
-            if new_line is not None:
-                lines[i] = new_line
-                applied += 1
-                break
-        manifest.write_text("".join(lines), encoding="utf-8")
+        original = manifest.read_text(encoding="utf-8")
+        lines = original.splitlines(keepends=True)
+        for name, latest in pkg_updates:
+            for i, line in enumerate(lines):
+                new_line = _update_line(line, name, latest)
+                if new_line is not None:
+                    lines[i] = new_line
+                    applied += 1
+                    break
+        updated = "".join(lines)
+        if len(updated) < len(original):
+            console.print(
+                f"[red]Safety check failed for {sf}: file would shrink "
+                f"({len(original)} → {len(updated)} bytes). Skipping write.[/]"
+            )
+            continue
+        manifest.write_text(updated, encoding="utf-8")
 
     noun = "dependency" if applied == 1 else "dependencies"
     console.print(f"[green]Updated {applied} {noun}.[/]")

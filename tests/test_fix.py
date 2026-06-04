@@ -49,6 +49,16 @@ def test_update_line_no_match() -> None:
     assert _update_line("flask>=2.0\n", "requests", "2.32.3") is None
 
 
+def test_update_line_hyphenated_package() -> None:
+    assert _update_line("python-dotenv>=1.0.0\n", "python-dotenv", "1.1.0") == "python-dotenv==1.1.0\n"
+    assert _update_line("python_dotenv>=1.0.0\n", "python-dotenv", "1.1.0") == "python_dotenv==1.1.0\n"
+    assert _update_line("pytest-cov>=4.0\n", "pytest-cov", "5.0.0") == "pytest-cov==5.0.0\n"
+
+
+def test_update_line_dotted_package() -> None:
+    assert _update_line("zope.interface>=5.0.0\n", "zope.interface", "6.0.0") == "zope.interface==6.0.0\n"
+
+
 def test_apply_updates_writes_file(tmp_path: Path) -> None:
     req = tmp_path / "requirements.txt"
     req.write_text("requests>=2.28.0\nflask>=2.0\n", encoding="utf-8")
@@ -58,6 +68,25 @@ def test_apply_updates_writes_file(tmp_path: Path) -> None:
     content = req.read_text()
     assert "requests==2.32.3" in content
     assert "flask>=2.0" in content  # unchanged
+
+
+def test_apply_updates_hyphenated_preserves_other_deps(tmp_path: Path) -> None:
+    req = tmp_path / "requirements.txt"
+    req.write_text(
+        "requests>=2.28.0\npython-dotenv>=1.0.0\nflask>=2.0\nclick>=8.0\n",
+        encoding="utf-8",
+    )
+    updates = [
+        ("python-dotenv", "1.0.0", "1.1.0", "requirements.txt"),
+        ("click", "8.0", "8.1.7", "requirements.txt"),
+    ]
+    applied = _apply_updates(tmp_path, updates)
+    assert applied == 2
+    content = req.read_text()
+    assert "python-dotenv==1.1.0" in content
+    assert "click==8.1.7" in content
+    assert "requests>=2.28.0" in content  # untouched
+    assert "flask>=2.0" in content  # untouched
 
 
 def test_apply_updates_missing_file(tmp_path: Path) -> None:
