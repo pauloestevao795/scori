@@ -554,7 +554,9 @@ def compute(
     data = _gather(dep["name"])
 
     if data.get("_unavailable"):
-        current = _current_version_from_spec(dep["version_spec"], dep["name"], project_root)
+        current = _current_version_from_spec(
+            dep["version_spec"], dep["name"], project_root
+        )
         return FrictionResult(
             name=dep["name"],
             current_version=current,
@@ -583,6 +585,7 @@ def compute(
     # Skip version-jump scoring when installed version is unknown — comparing
     # "0.0.0" against any real version always produces a major jump and inflates
     # the score even though the project may already be on a recent release.
+    jump: VersionJump
     if current == "0.0.0":
         jump, jump_pts = "unknown", 0
     else:

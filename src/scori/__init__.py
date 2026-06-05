@@ -18,14 +18,14 @@ Stable public API (guaranteed not to change in 1.x releases):
     scan_all()      — discover all supported ecosystems in a project tree
 """
 
+from ._types import Dependency, FrictionLabel, FrictionResult, VersionJump
 from .friction import compute
-from .npm import compute_npm, scan_npm
 from .golang import compute_go, scan_go
+from .npm import compute_npm, scan_npm
 from .rust import compute_rust, scan_rust
 from .scanner import scan, scan_all
-from ._types import Dependency, FrictionLabel, FrictionResult, VersionJump
 
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 __all__ = [
     "__version__",
     "compute",

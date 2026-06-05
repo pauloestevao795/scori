@@ -91,7 +91,9 @@ def _from_pipfile(path: Path) -> list[Dependency]:
             if isinstance(spec, dict):
                 spec = spec.get("version", "*")
             version_spec = "" if spec == "*" else spec
-            deps.append(Dependency(name=name, version_spec=version_spec, source_file=path.name))
+            deps.append(
+                Dependency(name=name, version_spec=version_spec, source_file=path.name)
+            )
     return deps
 
 
@@ -241,8 +243,13 @@ def scan_all(project_path: str | Path) -> list[Dependency]:
     a package name can exist in multiple registries and each is a distinct entry.
     Within each ecosystem, duplicates are still suppressed.
     """
-    from .npm import scan_npm        # lazy imports to avoid circular deps
     from .golang import scan_go
+    from .npm import scan_npm  # lazy imports to avoid circular deps
     from .rust import scan_rust
 
-    return scan(project_path) + scan_npm(project_path) + scan_go(project_path) + scan_rust(project_path)
+    return (
+        scan(project_path)
+        + scan_npm(project_path)
+        + scan_go(project_path)
+        + scan_rust(project_path)
+    )

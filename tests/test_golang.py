@@ -40,11 +40,16 @@ def test_escape_module_no_uppercase() -> None:
 
 
 def test_escape_module_uppercase() -> None:
-    assert _escape_module("github.com/BurntSushi/toml") == "github.com/!burnt!sushi/toml"
+    assert (
+        _escape_module("github.com/BurntSushi/toml") == "github.com/!burnt!sushi/toml"
+    )
 
 
 def test_escape_module_multiple_uppercase() -> None:
-    assert _escape_module("github.com/PuerkitoBio/goquery") == "github.com/!puerkito!bio/goquery"
+    assert (
+        _escape_module("github.com/PuerkitoBio/goquery")
+        == "github.com/!puerkito!bio/goquery"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +284,9 @@ def test_compute_go_with_cves(
     mock_vtime.return_value = ""
 
     from scori._types import Dependency
-    dep = Dependency(name="github.com/foo/vuln", version_spec="v1.0.0", source_file="go.mod")
+    dep = Dependency(
+        name="github.com/foo/vuln", version_spec="v1.0.0", source_file="go.mod"
+    )
     result = compute_go(dep, project_root=tmp_path)
     assert result["cve_current"] == 2
     assert result["cve_latest"] == 0
@@ -298,7 +305,11 @@ def test_compute_go_unresolved_version(
     _osv_cache.clear()
     _osv_cache[("github.com/foo/bar", "1.0.0", "Go")] = (0, 0, [])
     mock_fetch.return_value = {
-        "go": {"module": "github.com/foo/bar", "latest_version": "1.0.0", "latest_time": ""},
+        "go": {
+            "module": "github.com/foo/bar",
+            "latest_version": "1.0.0",
+            "latest_time": "",
+        },
         "releases": [],
         "changelog": "",
     }
@@ -323,14 +334,20 @@ def test_compute_go_transitive_pts(
     _osv_cache[("github.com/foo/bar", "1.0.0", "Go")] = (0, 0, [])
     _osv_cache[("github.com/foo/bar", "2.0.0", "Go")] = (0, 0, [])
     mock_fetch.return_value = {
-        "go": {"module": "github.com/foo/bar", "latest_version": "2.0.0", "latest_time": ""},
+        "go": {
+            "module": "github.com/foo/bar",
+            "latest_version": "2.0.0",
+            "latest_time": "",
+        },
         "releases": [],
         "changelog": "",
     }
     mock_vtime.return_value = ""
 
     from scori._types import Dependency
-    dep = Dependency(name="github.com/foo/bar", version_spec="v1.0.0", source_file="go.mod")
+    dep = Dependency(
+        name="github.com/foo/bar", version_spec="v1.0.0", source_file="go.mod"
+    )
     result = compute_go(dep, transitive_affected=3, project_root=tmp_path)
     # jump=major=50, transitive=3*3=9 → 59
     assert result["score"] == 59

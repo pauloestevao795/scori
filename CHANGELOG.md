@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 semantic versioning [SemVer](https://semver.org/).
 
+## [1.2.4] - 2026-06-05
+
+### Fixed
+
+- **`scori report --format html` now populates the package table for npm
+  projects** (and Go/Rust projects): the `report` command was calling the
+  Python-only `scan()` function instead of the polyglot `scan_all()`, so
+  non-Python ecosystems returned an empty dependency list and the HTML
+  tbody was always empty. Fixed by switching to `scan_all()` and passing
+  `lang="auto"` to `_compute_all()`, the same path already used by
+  `scori friction`.
+
+### Internal
+
+- Resolved all pre-existing `ruff` E501/I001/UP035/SIM105/F401 lint
+  warnings and four `mypy` strict-mode errors (`version_jump` typed as
+  `str` instead of `VersionJump` in the npm, Go, Rust, and Python
+  adapters).
+- Upgraded `pip` lock-file pin from 26.1.1 → 26.1.2 (PYSEC-2026-196).
+
 ## [1.2.3] - 2026-06-03
 
 ### Fixed

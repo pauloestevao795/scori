@@ -19,6 +19,8 @@ import re
 import shutil
 import sys
 import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,9 +30,6 @@ from rich.table import Table
 from . import __version__
 from ._types import Dependency, FrictionResult
 from .config import ScoriConfig
-from concurrent.futures import ThreadPoolExecutor
-from typing import Callable
-
 from .friction import compute
 from .history import compute_trends, load_history, save_snapshot
 from .lockfile import detect_update_conflicts, load_transitive_counts
@@ -84,8 +83,8 @@ def _compute_all(
 
         runner = _run_rust
     elif lang == "auto":
-        from .npm import compute_npm, load_transitive_counts_npm
         from .golang import compute_go, load_transitive_counts_go
+        from .npm import compute_npm, load_transitive_counts_npm
         from .rust import compute_rust, load_transitive_counts_rust
         transitive_py = load_transitive_counts(project_root)
         transitive_npm = load_transitive_counts_npm(project_root)
@@ -580,10 +579,12 @@ def _cmd_report(args: argparse.Namespace) -> int:
     cfg = ScoriConfig.load(Path(args.path))
     threshold = args.threshold if args.threshold != 75 else cfg.threshold
 
-    deps = scan(args.path)
+    from .scanner import scan_all
+
+    deps = scan_all(args.path)
     deps = [d for d in deps if d["name"].lower() not in cfg.ignore]
     project_root = Path(args.path)
-    results = _compute_all(deps, project_root)
+    results = _compute_all(deps, project_root, lang="auto")
     results.sort(key=lambda r: r["score"], reverse=True)
 
     if args.format == "json":
@@ -1081,7 +1082,10 @@ def main(argv: list[str] | None = None) -> int:
         "--lang",
         choices=["auto", "python", "npm", "go", "rust"],
         default="auto",
-        help="Dependency ecosystem — auto detects all supported ecosystems (default: auto)",
+        help=(
+            "Dependency ecosystem — auto detects all supported ecosystems"
+            " (default: auto)"
+        ),
     )
     p_fric.set_defaults(func=_cmd_friction)
 
@@ -1105,7 +1109,10 @@ def main(argv: list[str] | None = None) -> int:
         "--lang",
         choices=["auto", "python", "npm", "go", "rust"],
         default="auto",
-        help="Dependency ecosystem — auto detects all supported ecosystems (default: auto)",
+        help=(
+            "Dependency ecosystem — auto detects all supported ecosystems"
+            " (default: auto)"
+        ),
     )
     p_mon.set_defaults(func=_cmd_monitor)
 

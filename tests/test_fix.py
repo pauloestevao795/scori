@@ -50,13 +50,25 @@ def test_update_line_no_match() -> None:
 
 
 def test_update_line_hyphenated_package() -> None:
-    assert _update_line("python-dotenv>=1.0.0\n", "python-dotenv", "1.1.0") == "python-dotenv==1.1.0\n"
-    assert _update_line("python_dotenv>=1.0.0\n", "python-dotenv", "1.1.0") == "python_dotenv==1.1.0\n"
-    assert _update_line("pytest-cov>=4.0\n", "pytest-cov", "5.0.0") == "pytest-cov==5.0.0\n"
+    assert (
+        _update_line("python-dotenv>=1.0.0\n", "python-dotenv", "1.1.0")
+        == "python-dotenv==1.1.0\n"
+    )
+    assert (
+        _update_line("python_dotenv>=1.0.0\n", "python-dotenv", "1.1.0")
+        == "python_dotenv==1.1.0\n"
+    )
+    assert (
+        _update_line("pytest-cov>=4.0\n", "pytest-cov", "5.0.0")
+        == "pytest-cov==5.0.0\n"
+    )
 
 
 def test_update_line_dotted_package() -> None:
-    assert _update_line("zope.interface>=5.0.0\n", "zope.interface", "6.0.0") == "zope.interface==6.0.0\n"
+    assert (
+        _update_line("zope.interface>=5.0.0\n", "zope.interface", "6.0.0")
+        == "zope.interface==6.0.0\n"
+    )
 
 
 def test_apply_updates_writes_file(tmp_path: Path) -> None:

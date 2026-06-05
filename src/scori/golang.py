@@ -12,6 +12,7 @@ OSV advisory data uses ecosystem="Go".
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -22,7 +23,7 @@ from typing import Any, cast
 import requests
 from packaging.version import InvalidVersion, Version
 
-from ._types import Dependency, FrictionResult
+from ._types import Dependency, FrictionResult, VersionJump
 from .friction import (
     CACHE_DIR,
     CACHE_TTL_SECONDS,
@@ -103,7 +104,9 @@ def _from_go_mod(path: Path) -> list[Dependency]:
         key = module.lower()
         if key not in seen:
             seen.add(key)
-            result.append(Dependency(name=module, version_spec=version, source_file="go.mod"))
+            result.append(
+                Dependency(name=module, version_spec=version, source_file="go.mod")
+            )
     return result
 
 
@@ -159,10 +162,8 @@ def _from_go_sum(module: str, root: Path) -> str:
 
     parsed: list[tuple[Version, str]] = []
     for v in all_versions:
-        try:
+        with contextlib.suppress(InvalidVersion):
             parsed.append((Version(v), v))
-        except InvalidVersion:
-            pass
     if parsed:
         return max(parsed, key=lambda x: x[0])[1]
     return all_versions[0]
@@ -234,14 +235,10 @@ def _fetch_go(module: str) -> dict[str, Any]:
     releases: list[dict[str, Any]] = []
     changelog = ""
     if owner_repo is not None:
-        try:
+        with contextlib.suppress(requests.RequestException):
             releases = _fetch_github_releases(*owner_repo)
-        except requests.RequestException:
-            pass
-        try:
+        with contextlib.suppress(requests.RequestException):
             changelog = _fetch_github_changelog(*owner_repo)
-        except requests.RequestException:
-            pass
 
     payload: dict[str, Any] = {
         "go": {
@@ -315,6 +312,7 @@ def compute_go(
     latest = go.get("latest_version") or "0.0.0"
     current = _resolve_version_go(dep["name"], dep["version_spec"], project_root)
 
+    jump: VersionJump
     if current == "0.0.0":
         jump, jump_pts = "unknown", 0
     else:

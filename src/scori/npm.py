@@ -20,7 +20,7 @@ from typing import Any, cast
 
 import requests
 
-from ._types import Dependency, FrictionResult
+from ._types import Dependency, FrictionResult, VersionJump
 from .friction import (
     CACHE_DIR,
     CACHE_TTL_SECONDS,
@@ -139,7 +139,8 @@ def _from_yarn_lock(name: str, root: Path) -> list[str]:
     for line in text.splitlines():
         if not in_block:
             # Block header contains the package name followed by @spec:
-            if re.search(r'"?' + re.escape(name) + r'@', line) and line.rstrip().endswith(":"):
+            pattern = r'"?' + re.escape(name) + r"@"
+            if re.search(pattern, line) and line.rstrip().endswith(":"):
                 in_block = True
         else:
             m = re.match(r'\s+version\s+"?([^\s"]+)"?', line)
@@ -338,6 +339,7 @@ def compute_npm(
     latest = str(dist_tags.get("latest") or "0.0.0")
     current = _resolve_version_npm(dep["name"], dep["version_spec"], project_root)
 
+    jump: VersionJump
     if current == "0.0.0":
         jump, jump_pts = "unknown", 0
     else:

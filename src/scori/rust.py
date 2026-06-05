@@ -11,6 +11,7 @@ OSV advisory data uses ecosystem="crates.io" (covers RustSec advisories).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -21,7 +22,7 @@ from typing import Any, cast
 
 import requests
 
-from ._types import Dependency, FrictionResult
+from ._types import Dependency, FrictionResult, VersionJump
 from .friction import (
     CACHE_DIR,
     CACHE_TTL_SECONDS,
@@ -124,7 +125,11 @@ def _from_cargo_lock(name: str, root: Path) -> str:
                 continue
             source = str(pkg.get("source") or "")
             # Accept registry packages (crates.io uses registry+ or sparse+)
-            if source.startswith("registry+") or source.startswith("sparse+") or source == "":
+            if (
+                source.startswith("registry+")
+                or source.startswith("sparse+")
+                or source == ""
+            ):
                 v = str(pkg.get("version") or "")
                 if v:
                     return v
@@ -225,14 +230,10 @@ def _fetch_rust(name: str) -> dict[str, Any]:
     releases: list[dict[str, Any]] = []
     changelog = ""
     if owner_repo is not None:
-        try:
+        with contextlib.suppress(requests.RequestException):
             releases = _fetch_github_releases(*owner_repo)
-        except requests.RequestException:
-            pass
-        try:
+        with contextlib.suppress(requests.RequestException):
             changelog = _fetch_github_changelog(*owner_repo)
-        except requests.RequestException:
-            pass
 
     payload: dict[str, Any] = {
         "crate": {
@@ -287,6 +288,7 @@ def compute_rust(
     latest = crate.get("latest_version") or "0.0.0"
     current = _resolve_version_rust(dep["name"], dep["version_spec"], project_root)
 
+    jump: VersionJump
     if current == "0.0.0":
         jump, jump_pts = "unknown", 0
     else:

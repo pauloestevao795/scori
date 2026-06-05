@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from scori._types import Dependency
 from scori.friction import _osv_cache
 from scori.npm import (
@@ -67,7 +65,9 @@ def test_scan_npm_skips_node_modules(tmp_path: Path) -> None:
     nm = tmp_path / "node_modules" / "lodash"
     nm.mkdir(parents=True)
     (nm / "package.json").write_text(json.dumps({"dependencies": {"evil": "1.0.0"}}))
-    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {"safe": "1.0.0"}}))
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"safe": "1.0.0"}})
+    )
     deps = scan_npm(tmp_path)
     names = {d["name"] for d in deps}
     assert "safe" in names
@@ -315,7 +315,10 @@ def test_compute_npm_cve_score(mock_fetch: object, tmp_path: Path) -> None:
         "npm": {
             "name": "lodash",
             "dist-tags": {"latest": "4.17.21"},
-            "time": {"4.17.20": "2020-01-01T00:00:00.000Z", "4.17.21": "2021-01-01T00:00:00.000Z"},
+            "time": {
+                "4.17.20": "2020-01-01T00:00:00.000Z",
+                "4.17.21": "2021-01-01T00:00:00.000Z",
+            },
             "repository": {},
             "deprecated_versions": [],
         },
@@ -336,7 +339,9 @@ def test_compute_npm_cve_score(mock_fetch: object, tmp_path: Path) -> None:
 
 
 @patch("scori.npm._fetch_npm")
-def test_compute_npm_transitive_affects_score(mock_fetch: object, tmp_path: Path) -> None:
+def test_compute_npm_transitive_affects_score(
+    mock_fetch: object, tmp_path: Path
+) -> None:
     _osv_cache.clear()
     _osv_cache[("express", "4.18.0", "npm")] = (0, 0, [])
     _osv_cache[("express", "4.18.2", "npm")] = (0, 0, [])

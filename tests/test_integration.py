@@ -50,7 +50,9 @@ def _assert_valid(result: FrictionResult) -> None:
 
 @pytest.mark.integration
 def test_compute_requests_pinned() -> None:
-    dep = Dependency(name="requests", version_spec="==2.28.0", source_file="requirements.txt")
+    dep = Dependency(
+        name="requests", version_spec="==2.28.0", source_file="requirements.txt"
+    )
     result = compute(dep)
     _assert_valid(result)
     assert result["name"] == "requests"
@@ -61,7 +63,9 @@ def test_compute_requests_pinned() -> None:
 
 @pytest.mark.integration
 def test_compute_flask_pinned() -> None:
-    dep = Dependency(name="flask", version_spec="==2.3.0", source_file="requirements.txt")
+    dep = Dependency(
+        name="flask", version_spec="==2.3.0", source_file="requirements.txt"
+    )
     result = compute(dep)
     _assert_valid(result)
     assert result["name"] == "flask"
@@ -70,7 +74,9 @@ def test_compute_flask_pinned() -> None:
 
 @pytest.mark.integration
 def test_compute_numpy_major_jump() -> None:
-    dep = Dependency(name="numpy", version_spec="==1.24.0", source_file="requirements.txt")
+    dep = Dependency(
+        name="numpy", version_spec="==1.24.0", source_file="requirements.txt"
+    )
     result = compute(dep)
     _assert_valid(result)
     # numpy 1.x → 2.x is a known major jump; score should be High or Critical
@@ -89,7 +95,9 @@ def test_compute_unpinned_falls_back() -> None:
 
 @pytest.mark.integration
 def test_compute_result_is_stable() -> None:
-    dep = Dependency(name="packaging", version_spec="==24.0", source_file="pyproject.toml")
+    dep = Dependency(
+        name="packaging", version_spec="==24.0", source_file="pyproject.toml"
+    )
     r1 = compute(dep)
     r2 = compute(dep)
     assert r1["score"] == r2["score"]
@@ -112,7 +120,10 @@ def test_patch_jump_scores_lower_than_major() -> None:
     _assert_valid(patch_result)
     _assert_valid(major_result)
 
-    if patch_result["version_jump"] == "patch" and major_result["version_jump"] == "major":
+    if (
+        patch_result["version_jump"] == "patch"
+        and major_result["version_jump"] == "major"
+    ):
         assert patch_result["score"] < major_result["score"]
 
 
